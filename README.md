@@ -69,7 +69,7 @@ property-insertion order.
 ```sh
 pnpm install
 pnpm test           # build ReScript + run the Vitest suite (52 tests, ~6 s)
-pnpm bench          # build + run the benchmark harness (Node ≥18)
+pnpm bench          # build + run the benchmark harness (Node ≥20)
 pnpm build          # produce ESM bundle in dist/
 pnpm res:watch      # ReScript incremental rebuild
 ```
@@ -117,7 +117,7 @@ tests/
   StackOverflow_stress_test.res
 bench/
   Bench.res                  – Comparison vs @rescript/core Map/Array
-.github/workflows/ci.yml     – Build + test on Node 18 / 20 / 22
+.github/workflows/ci.yml     – Build + test on Node 20 / 22
 rescript.json                – ReScript 12 config (esmodule, .res.mjs)
 vite.config.js               – Vite build + Vitest config
 package.json                 – pnpm scripts + npm publishing metadata
@@ -218,7 +218,7 @@ build and would otherwise dominate the harness's wall-clock.
 
 ### Requirements
 
-- **Node.js** ≥ 18
+- **Node.js** ≥ 20 (ReScript 12 dropped Node 18 support)
 - **ReScript** ≥ 12.0.0-alpha.13
 - **`@rescript/core`** ≥ 1.6.0 opened globally (i.e. `compiler-flags: ["-open RescriptCore"]` in `rescript.json`)
 
