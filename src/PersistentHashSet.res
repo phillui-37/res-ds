@@ -1,0 +1,84 @@
+// PersistentHashSet.res
+// Persistent hash set built on PersistentHashMap. The map's value is just
+// a sentinel — we keep it as `unit` so the runtime cost is one bit.
+
+module M = PersistentHashMap
+
+type t<'a> = M.t<'a, unit>
+
+let make = (): t<'a> => M.make()
+
+let size = (s: t<'a>): int => M.size(s)
+let has = (s: t<'a>, x: 'a): bool => M.has(s, x)
+let add = (s: t<'a>, x: 'a): t<'a> => M.set(s, x, ())
+let remove = (s: t<'a>, x: 'a): t<'a> => M.remove(s, x)
+
+let fromArray = (arr: array<'a>): t<'a> => {
+  let s = ref(make())
+  Array.forEach(arr, x => s := add(s.contents, x))
+  s.contents
+}
+
+let toArray = (s: t<'a>): array<'a> => M.keys(s)
+
+let forEach = (s: t<'a>, f: 'a => unit): unit => M.forEach(s, (k, _) => f(k))
+
+let reduce = (s: t<'a>, init: 'b, f: ('b, 'a) => 'b): 'b =>
+  M.reduce(s, init, (acc, k, _) => f(acc, k))
+
+let union = (a: t<'a>, b: t<'a>): t<'a> => M.merge(a, b)
+
+let intersect = (a: t<'a>, b: t<'a>): t<'a> =>
+  M.withTransient(make(), t => {
+    forEach(a, x =>
+      if has(b, x) {
+        M.setMut(t, x, ())->ignore
+      }
+    )
+    t
+  })
+
+let difference = (a: t<'a>, b: t<'a>): t<'a> =>
+  M.withTransient(make(), t => {
+    forEach(a, x =>
+      if !has(b, x) {
+        M.setMut(t, x, ())->ignore
+      }
+    )
+    t
+  })
+
+// Iterator yielding each element once.
+type iterStep<'a> = {value: option<'a>, done: bool}
+type iter<'a> = {next: unit => iterStep<'a>}
+
+let iterator = (s: t<'a>): iter<'a> => {
+  let buffer = toArray(s)
+  let len = Array.length(buffer)
+  let i = ref(0)
+  let next = () =>
+    if i.contents >= len {
+      {value: None, done: true}
+    } else {
+      let x = Array.getUnsafe(buffer, i.contents)
+      i := i.contents + 1
+      {value: Some(x), done: false}
+    }
+  {next: next}
+}
+
+// ───────────────────────── transient ─────────────────────────
+
+type transient<'a> = M.transient<'a, unit>
+
+let asTransient = (s: t<'a>): transient<'a> => M.asTransient(s)
+let addMut = (t: transient<'a>, x: 'a): transient<'a> => M.setMut(t, x, ())
+let removeMut = (t: transient<'a>, x: 'a): transient<'a> => M.removeMut(t, x)
+let hasMut = (t: transient<'a>, x: 'a): bool =>
+  switch M.getMut(t, x) {
+  | Some(_) => true
+  | None => false
+  }
+let persistent = (t: transient<'a>): t<'a> => M.persistent(t)
+let withTransient = (s: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
+  s->asTransient->f->persistent
