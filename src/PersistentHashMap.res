@@ -14,7 +14,6 @@
 
 module B = Int.Bitwise
 let bits = 5
-let mask5 = 0x1f
 
 // Edit token, used by transients to identify owned (in-place mutable) nodes.
 type edit = {mutable owned: bool}
@@ -510,19 +509,6 @@ let asTransient = (m: t<'k, 'v>): transient<'k, 'v> => {
 let ensureEditable = (t: transient<'k, 'v>): unit =>
   if !t.edit.owned {
     throw(Invalid_argument("transient used after persistent! was called"))
-  }
-
-// Owning helper — clone the node iff it is not already owned by `edit`.
-let editableBI = (
-  edit: edit,
-  bitmap: int,
-  array: array<entry<'k, 'v>>,
-  ownedEdit: edit,
-): node<'k, 'v> =>
-  if edit === ownedEdit {
-    BitmapIndexed({edit: edit, bitmap: bitmap, array: Array.copy(array)})
-  } else {
-    BitmapIndexed({edit: edit, bitmap: bitmap, array: Array.copy(array)})
   }
 
 let rec nodeAssocMut = (

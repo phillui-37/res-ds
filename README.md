@@ -24,7 +24,8 @@ use the deprecated `Belt` modules.
 - **Transient (in-place mutable) variants** for both vector and hashmap with
   an `edit`-token ownership protocol (`asTransient` / `*Mut` / `persistent`).
   Building a 5 000-element collection via a transient is dramatically
-  cheaper than chaining persistent operations.
+  cheaper than chaining persistent operations. Reusing a transient after
+  `persistent` throws `Invalid_argument`.
 - **Hash-collision optimisation** — when two distinct keys hash to the same
   32-bit value the HAMT degrades into a `HashCollision` leaf that supports
   full O(k) linear probe within the colliding bucket while every other path
@@ -33,12 +34,41 @@ use the deprecated `Belt` modules.
   vector, hashmap, and hashset.
 - **Structural sharing** — every "mutating" persistent operation returns a
   new collection that shares all unchanged subtrees with the previous one.
+- **`.resi` interface files** — every public module ships a `.resi`,
+  so the published API surface is small, stable, and documented.
+
+### Key equality semantics
+
+`PersistentHashMap` and `PersistentHashSet` use the generic `Hash.hash` /
+`Hash.equals` pair. They are defined as follows:
+
+| Key kind | Equality | Hash |
+|---|---|---|
+| `int` / `float` / `string` / `bool` / `bigint` | JS `===` (value) | by value |
+| `null` / `undefined` | JS `===` | `0` |
+| Anything else (object, array, function, symbol, `Date`, `Map`, …) | JS `===` (**identity**) | stable identity, backed by an internal `WeakMap` |
+
+In particular, **two structurally-equal but separately-constructed objects are
+*not* equal as keys**:
+
+```rescript
+let a = {"id": 1}
+let b = {"id": 1}
+M.make()->M.set(a, "x")->M.set(b, "y")->M.size  // 2
+```
+
+If you need value-equality on a record/object key, intern the key (e.g. use
+its `id` as a string/int key) or build a wrapper key type. This matches
+Clojure's `System.identityHashCode` fallback for non-`IHashEq` values and is
+*sound* — the previous JSON-based fallback threw on cycles, mishandled
+`Date` / `Map` / `Set` / functions / `undefined`, and was sensitive to
+property-insertion order.
 
 ## Getting started
 
 ```sh
 pnpm install
-pnpm test           # build ReScript + run the Vitest suite (40 tests, ~6 s)
+pnpm test           # build ReScript + run the Vitest suite (52 tests, ~6 s)
 pnpm bench          # build + run the benchmark harness (Node ≥18)
 pnpm build          # produce ESM bundle in dist/
 pnpm res:watch      # ReScript incremental rebuild
@@ -73,22 +103,25 @@ let _ = S.union(s, S.fromArray(["b", "c"])) // {a, b, c}
 
 ```
 src/
-  Hash.res                   – 32-bit hash + popcount / bitpos / arrayIndex
-  PersistentVector.res       – Bitmapped trie + tail + transient
-  PersistentHashMap.res      – HAMT + collision nodes + transient
-  PersistentHashSet.res      – Set built on the hashmap
-  ResDs.res                  – Public barrel module
+  Hash.res(i)                – 32-bit hash + popcount / bitpos / arrayIndex
+  PersistentVector.res(i)    – Bitmapped trie + tail + transient
+  PersistentHashMap.res(i)   – HAMT + collision nodes + transient
+  PersistentHashSet.res(i)   – Set built on the hashmap
+  ResDs.res(i)               – Public barrel module
 tests/
   Vitest.res                 – Bindings to vitest globals
+  Hash_test.res
   PersistentVector_test.res
   PersistentHashMap_test.res
   PersistentHashSet_test.res
   StackOverflow_stress_test.res
 bench/
   Bench.res                  – Comparison vs @rescript/core Map/Array
+.github/workflows/ci.yml     – Build + test on Node 18 / 20 / 22
 rescript.json                – ReScript 12 config (esmodule, .res.mjs)
 vite.config.js               – Vite build + Vitest config
-package.json                 – pnpm scripts
+package.json                 – pnpm scripts + npm publishing metadata
+LICENSE                      – MIT
 ```
 
 ## Recursion depth & stack-overflow stress tests

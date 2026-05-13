@@ -1,8 +1,33 @@
 {
   "name": "res-ds",
   "version": "0.1.0",
-  "description": "Clojure-inspired persistent / immutable data structures implemented in ReScript 12.",
+  "description": "Clojure-inspired persistent / immutable data structures (HAMT, bitmapped vector) implemented in ReScript 12.",
   "type": "module",
+  "main": "./src/ResDs.res.mjs",
+  "module": "./src/ResDs.res.mjs",
+  "exports": {
+    ".": {
+      "import": "./src/ResDs.res.mjs",
+      "default": "./src/ResDs.res.mjs"
+    },
+    "./Hash": "./src/Hash.res.mjs",
+    "./Vector": "./src/PersistentVector.res.mjs",
+    "./HashMap": "./src/PersistentHashMap.res.mjs",
+    "./HashSet": "./src/PersistentHashSet.res.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/**/*.res",
+    "src/**/*.resi",
+    "src/**/*.res.mjs",
+    "rescript.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "res:build": "rescript build",
     "res:clean": "rescript clean",
@@ -11,7 +36,8 @@
     "dev": "vite",
     "test": "pnpm run res:build && vitest run",
     "test:watch": "vitest",
-    "bench": "pnpm run res:build && node bench/Bench.res.mjs"
+    "bench": "pnpm run res:build && node bench/Bench.res.mjs",
+    "prepublishOnly": "pnpm run res:clean && pnpm run res:build && pnpm test"
   },
   "keywords": [
     "rescript",
@@ -19,9 +45,29 @@
     "persistent",
     "immutable",
     "hamt",
-    "data-structures"
+    "trie",
+    "data-structures",
+    "vector",
+    "hashmap",
+    "hashset"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phillui-37/res-ds.git"
+  },
+  "bugs": {
+    "url": "https://github.com/phillui-37/res-ds/issues"
+  },
+  "homepage": "https://github.com/phillui-37/res-ds#readme",
+  "peerDependencies": {
+    "@rescript/core": ">=1.6.0",
+    "rescript": ">=12.0.0-alpha.13"
+  },
+  "peerDependenciesMeta": {
+    "@rescript/core": { "optional": false },
+    "rescript": { "optional": false }
+  },
   "devDependencies": {
     "@rescript/core": "^1.6.1",
     "@rescript/runtime": "^12.2.0",

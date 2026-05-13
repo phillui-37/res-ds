@@ -30,18 +30,59 @@ let hashString = (s: string): int => {
 }
 
 // Float hash — combine the two 32-bit halves of the IEEE-754 representation.
+// Buffers are hoisted to module scope so the hot path doesn't allocate.
+let _floatBuf = ArrayBuffer.make(8)
+let _floatF64 = Float64Array.fromBuffer(_floatBuf)
+let _floatI32 = Int32Array.fromBuffer(_floatBuf)
+
 let hashFloat = (f: float): int => {
-  let buf = ArrayBuffer.make(8)
-  let f64 = Float64Array.fromBuffer(buf)
-  let i32v = Int32Array.fromBuffer(buf)
-  TypedArray.set(f64, 0, f)
-  let lo = TypedArray.get(i32v, 0)->Option.getOr(0)
-  let hi = TypedArray.get(i32v, 1)->Option.getOr(0)
+  TypedArray.set(_floatF64, 0, f)
+  let lo = TypedArray.get(_floatI32, 0)->Option.getOr(0)
+  let hi = TypedArray.get(_floatI32, 1)->Option.getOr(0)
   mix32(B.lxor(lo, hi))
 }
 
-// Generic hash — best-effort dispatch over runtime type.
-// Mirrors Clojure's principle: if `equals(a, b)` then `hash(a) == hash(b)`.
+// Identity hashing for non-primitive values (objects, functions, symbols).
+//
+// We deliberately do NOT structurally hash objects:
+//   * `JSON.stringify` throws on cycles and silently drops `undefined`,
+//     functions, and symbols.
+//   * `Date`, `Map`, `Set`, `RegExp`, typed arrays, and class instances all
+//     stringify to ambiguous JSON.
+//   * `JSON.stringify({a:1, b:2})` and `JSON.stringify({b:2, a:1})` differ —
+//     property iteration order leaks into hash codes.
+//
+// Instead we assign each distinct object a fresh, stable 32-bit identity on
+// first use, recorded in a module-private `WeakMap`. This matches JVM
+// Clojure's `System.identityHashCode` fallback for non-`IHashEq` values, and
+// — combined with `===` equality — gives sound, predictable behaviour:
+//
+//   `equals(a, b)`  ⇒  `hash(a) == hash(b)`            (identity for objects)
+//   `equals(a, b)`  is `===` for objects, structural for primitives.
+//
+// Callers who want value-equality for their own record/object types should
+// either intern the keys themselves or use primitive (string/int) keys.
+
+@new external newWeakMap: unit => 'wm = "WeakMap"
+@send external _wmGet: ('wm, 'k) => Nullable.t<int> = "get"
+@send external _wmSet: ('wm, 'k, int) => unit = "set"
+
+let _identityMap: 'wm = newWeakMap()
+let _identityCounter = ref(0)
+
+let identityHash = (v: 'a): int => {
+  switch _wmGet(_identityMap, v)->Nullable.toOption {
+  | Some(h) => h
+  | None =>
+    _identityCounter := _identityCounter.contents + 1
+    let h = mix32(_identityCounter.contents)
+    _wmSet(_identityMap, v, h)
+    h
+  }
+}
+
+// Generic hash — primitives are hashed by value, everything else by identity.
+// Property: if `equals(a, b)` then `hash(a) == hash(b)`.
 let hash: 'a => int = v => {
   let t = Type.typeof(v)
   switch t {
@@ -60,34 +101,19 @@ let hash: 'a => int = v => {
     if Obj.magic(v) === Obj.magic(Null.null) {
       0
     } else {
-      hashString(JSON.stringifyAny(v)->Option.getOr(""))
+      identityHash(v)
     }
-  | _ => hashString(JSON.stringifyAny(v)->Option.getOr(""))
+  | #bigint => hashString(Obj.magic(v)->Obj.magic->String.make)
+  | _ => identityHash(v) // function, symbol — identity-keyed in the WeakMap.
   }
 }
 
-// Generic structural equality. Uses JS `===` for primitives and JSON for objects.
-let equals: ('a, 'a) => bool = (a, b) => {
-  if Obj.magic(a) === Obj.magic(b) {
-    true
-  } else {
-    let ta = Type.typeof(a)
-    let tb = Type.typeof(b)
-    if ta !== tb {
-      false
-    } else {
-      switch ta {
-      | #object =>
-        if Obj.magic(a) === Obj.magic(Null.null) || Obj.magic(b) === Obj.magic(Null.null) {
-          false
-        } else {
-          JSON.stringifyAny(a) == JSON.stringifyAny(b)
-        }
-      | _ => false
-      }
-    }
-  }
-}
+// Generic equality.
+//   * Primitives: JS `===` (NaN ≠ NaN matches IEEE-754 and JS `Map.has`).
+//   * Non-primitives: identity (`===`). Two structurally-similar objects
+//     constructed independently are NOT considered equal — see `hash`
+//     above for the rationale.
+let equals: ('a, 'a) => bool = (a, b) => Obj.magic(a) === Obj.magic(b)
 
 // Mask off the relevant 5 bits for a given trie level shift.
 let mask = (hash: int, shift: int): int => B.land(B.lsr(hash, shift), 0x1f)

@@ -7,17 +7,6 @@ let noEdit = {
   owned: false
 };
 
-function emptyArray() {
-  return Core__Array.make(32, "Empty");
-}
-
-function emptyNode() {
-  return {
-    edit: noEdit,
-    array: Core__Array.make(32, "Empty")
-  };
-}
-
 function make() {
   return {
     size: 0,
@@ -766,38 +755,16 @@ function withTransient(v, f) {
   return persistent(f(asTransient(v)));
 }
 
-let B;
-
-let bits = 5;
-
-let branching = 32;
-
-let mask5 = 31;
-
 let length = size;
 
 export {
-  B,
-  bits,
-  branching,
-  mask5,
-  noEdit,
-  emptyArray,
-  emptyNode,
   make,
   size,
   length,
-  tailOffset,
-  arrayFor,
   get,
   getExn,
-  cloneNode,
-  newPath,
-  pushTail,
   push,
-  doSet,
   set,
-  popTail,
   pop,
   fromArray,
   toArray,
@@ -809,10 +776,6 @@ export {
   equals,
   iterator,
   asTransient,
-  ensureEditable,
-  editableNode,
-  pathFor,
-  tPushTail,
   pushMut,
   setMut,
   getMut,

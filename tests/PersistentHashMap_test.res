@@ -112,17 +112,11 @@ describe("PersistentHashMap — basics", () => {
 })
 
 describe("PersistentHashMap — collision handling", () => {
-  // Force a collision by using objects whose JSON.stringify produces the same
-  // text (our generic hash falls back on stringify). Easiest: use a custom
-  // wrapper type with the same shape.
   test("two keys with the same hash both round-trip", () => {
-    // The generic hash uses JSON.stringifyAny for objects — different
-    // objects will have different hashes, so we instead force a collision
-    // through repeatedly hashing strings until we find a clash. As that's
-    // expensive, we instead test the HashCollision path directly via the
-    // string keys "Aa" and "BB" which have the *same* Java-style 32-bit hash.
+    // The string keys "Aa" and "BB" share the *same* Java-style 32-bit hash.
     // (Aa: 'A'*31 + 'a' = 31*65 + 97 = 2112; BB: 31*66 + 66 = 2112.)
-    // That equality is preserved through our mix32.
+    // That equality is preserved through our mix32 finalizer, so they exercise
+    // the HashCollision path inside the HAMT.
     let h1 = Hash.hashString("Aa")
     let h2 = Hash.hashString("BB")
     expect(h1)->toBe(h2)

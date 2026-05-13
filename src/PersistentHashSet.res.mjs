@@ -106,10 +106,7 @@ function withTransient(s, f) {
   return PersistentHashMap.persistent(f(PersistentHashMap.asTransient(s)));
 }
 
-let M;
-
 export {
-  M,
   make,
   size,
   has,
@@ -130,4 +127,4 @@ export {
   persistent,
   withTransient,
 }
-/* No side effect */
+/* PersistentHashMap Not a pure module */

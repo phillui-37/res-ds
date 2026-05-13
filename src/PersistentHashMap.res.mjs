@@ -8,15 +8,6 @@ let noEdit = {
   owned: false
 };
 
-function emptyNode() {
-  return {
-    TAG: "BitmapIndexed",
-    edit: noEdit,
-    bitmap: 0,
-    array: []
-  };
-}
-
 function make() {
   return {
     size: 0,
@@ -141,12 +132,6 @@ function arrayReplace(array, idx, e) {
   let out = array.slice();
   out[idx] = e;
   return out;
-}
-
-function mkFlag() {
-  return {
-    contents: false
-  };
 }
 
 function mergeKVs(shift, h1, k1, v1, h2, k2, v2) {
@@ -630,15 +615,6 @@ function ensureEditable(t) {
   };
 }
 
-function editableBI(edit, bitmap, array, ownedEdit) {
-  return {
-    TAG: "BitmapIndexed",
-    edit: edit,
-    bitmap: bitmap,
-    array: array.slice()
-  };
-}
-
 function nodeAssocMut(ownEdit, _n, shift, hash, key, value, addedLeaf) {
   while (true) {
     let n = _n;
@@ -892,35 +868,14 @@ function merge(a, b) {
   }), t));
 }
 
-let B;
-
-let bits = 5;
-
-let mask5 = 31;
-
 export {
-  B,
-  bits,
-  mask5,
-  noEdit,
-  emptyNode,
   make,
   size,
-  nodeFind,
-  isNullKey,
   get,
   getExn,
   has,
-  arrayInsert,
-  arrayRemoveAt,
-  arrayReplace,
-  mkFlag,
-  mergeKVs,
-  nodeAssoc,
   set,
-  nodeWithout,
   remove,
-  nodeForEach,
   forEach,
   reduce,
   keys,
@@ -928,16 +883,13 @@ export {
   entries,
   fromEntries,
   iterator,
+  equals,
+  merge,
   asTransient,
-  ensureEditable,
-  editableBI,
-  nodeAssocMut,
   setMut,
   removeMut,
   getMut,
   persistent,
   withTransient,
-  equals,
-  merge,
 }
-/* No side effect */
+/* Hash Not a pure module */
