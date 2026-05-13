@@ -1,0 +1,23 @@
+{
+  "name": "res-ds",
+  "sources": [
+    {
+      "dir": "src",
+      "subdirs": true
+    },
+    {
+      "dir": "tests",
+      "subdirs": true,
+      "type": "dev"
+    }
+  ],
+  "package-specs": [
+    {
+      "module": "esmodule",
+      "in-source": true
+    }
+  ],
+  "suffix": ".res.mjs",
+  "dependencies": ["@rescript/core"],
+  "compiler-flags": ["-open RescriptCore"]
+}

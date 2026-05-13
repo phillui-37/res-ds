@@ -1,0 +1,32 @@
+{
+  "name": "res-ds",
+  "version": "0.1.0",
+  "description": "Clojure-inspired persistent / immutable data structures implemented in ReScript 12.",
+  "type": "module",
+  "scripts": {
+    "res:build": "rescript build",
+    "res:clean": "rescript clean",
+    "res:watch": "rescript build -w",
+    "build": "pnpm run res:build && vite build",
+    "dev": "vite",
+    "test": "pnpm run res:build && vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "rescript",
+    "clojure",
+    "persistent",
+    "immutable",
+    "hamt",
+    "data-structures"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@rescript/core": "^1.6.1",
+    "@rescript/runtime": "^12.2.0",
+    "rescript": "^12.0.0-alpha.13",
+    "vite": "^5.4.20",
+    "vitest": "^2.1.9"
+  },
+  "packageManager": "pnpm@9.15.9"
+}

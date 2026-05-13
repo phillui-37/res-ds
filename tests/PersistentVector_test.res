@@ -1,0 +1,135 @@
+// PersistentVector_test.res
+open Vitest
+module V = PersistentVector
+
+describe("PersistentVector — basics", () => {
+  test("empty vector has size 0", () => {
+    expect(V.size(V.make()))->toBe(0)
+  })
+
+  test("push/get round-trip for small vectors", () => {
+    let v = V.fromArray([1, 2, 3, 4, 5])
+    expect(V.size(v))->toBe(5)
+    expect(V.getExn(v, 0))->toBe(1)
+    expect(V.getExn(v, 4))->toBe(5)
+    expect(V.get(v, 5))->toEqual(None)
+  })
+
+  test("set returns a new vector and preserves the old", () => {
+    let v = V.fromArray([10, 20, 30])
+    let w = V.set(v, 1, 99)
+    expect(V.getExn(v, 1))->toBe(20)
+    expect(V.getExn(w, 1))->toBe(99)
+    expect(V.size(w))->toBe(3)
+  })
+
+  test("set at index == size acts like push (conj)", () => {
+    let v = V.fromArray([1, 2])
+    let w = V.set(v, 2, 3)
+    expect(V.toArray(w))->toEqual([1, 2, 3])
+  })
+
+  test("pop removes the last element", () => {
+    let v = V.fromArray([1, 2, 3])
+    let w = V.pop(v)
+    expect(V.size(w))->toBe(2)
+    expect(V.toArray(w))->toEqual([1, 2])
+  })
+
+  test("toArray round-trip on a 1000-element vector (crosses tail boundary)", () => {
+    let n = 1000
+    let arr = Array.fromInitializer(~length=n, i => i)
+    let v = V.fromArray(arr)
+    expect(V.size(v))->toBe(n)
+    expect(V.toArray(v))->toEqual(arr)
+  })
+
+  test("structural sharing: setting one element does not mutate the original", () => {
+    let v = V.fromArray(Array.fromInitializer(~length=200, i => i))
+    let w = V.set(v, 100, -1)
+    expect(V.getExn(v, 100))->toBe(100)
+    expect(V.getExn(w, 100))->toBe(-1)
+  })
+
+  test("push/pop stress crosses multiple trie levels (10 000 elements)", () => {
+    let n = 10_000
+    let v = ref(V.make())
+    for i in 0 to n - 1 {
+      v := V.push(v.contents, i)
+    }
+    expect(V.size(v.contents))->toBe(n)
+    for i in 0 to n - 1 {
+      expect(V.getExn(v.contents, i))->toBe(i)
+    }
+    // pop everything back down.
+    for _ in 1 to n {
+      v := V.pop(v.contents)
+    }
+    expect(V.size(v.contents))->toBe(0)
+  })
+
+  test("forEach / reduce / map / filter", () => {
+    let v = V.fromArray([1, 2, 3, 4, 5])
+    let sum = V.reduce(v, 0, (acc, x) => acc + x)
+    expect(sum)->toBe(15)
+    expect(V.toArray(V.map(v, x => x * 2)))->toEqual([2, 4, 6, 8, 10])
+    expect(V.toArray(V.filter(v, x => mod(x, 2) == 0)))->toEqual([2, 4])
+  })
+
+  test("iterator yields every element exactly once", () => {
+    let n = 100
+    let v = V.fromArray(Array.fromInitializer(~length=n, i => i))
+    let it = V.iterator(v)
+    let seen = []
+    let go = ref(true)
+    while go.contents {
+      let step = it.next()
+      if step.done {
+        go := false
+      } else {
+        switch step.value {
+        | Some(x) => Array.push(seen, x)
+        | None => ()
+        }
+      }
+    }
+    expect(seen)->toEqual(Array.fromInitializer(~length=n, i => i))
+  })
+})
+
+describe("PersistentVector — transients", () => {
+  test("transient pushMut + persistent matches the persistent path", () => {
+    let n = 5_000
+    let built = V.withTransient(V.make(), t => {
+      let cur = ref(t)
+      for i in 0 to n - 1 {
+        cur := V.pushMut(cur.contents, i)
+      }
+      cur.contents
+    })
+    expect(V.size(built))->toBe(n)
+    Array.forEach([0, 31, 32, 33, 1023, 1024, 1025, n - 1], i => {
+      expect(V.getExn(built, i))->toBe(i)
+    })
+  })
+
+  test("transient setMut updates in place", () => {
+    let v = V.fromArray(Array.fromInitializer(~length=100, i => i))
+    let w = V.withTransient(v, t => {
+      let cur = ref(t)
+      for i in 0 to 99 {
+        cur := V.setMut(cur.contents, i, i * 10)
+      }
+      cur.contents
+    })
+    // original is untouched
+    expect(V.getExn(v, 50))->toBe(50)
+    expect(V.getExn(w, 50))->toBe(500)
+  })
+
+  test("using a transient after persistent! throws", () => {
+    let t = V.asTransient(V.fromArray([1, 2, 3]))
+    let _ = V.persistent(t)
+    expect(() => V.pushMut(t, 4)->ignore)->toThrow
+  })
+})
