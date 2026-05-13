@@ -213,3 +213,135 @@ build and would otherwise dominate the harness's wall-clock.
 * Native `Map.get` wins lookup throughput by ~6× at N = 100 000 (it is a
   hand-tuned hash table inside V8). This is the expected trade-off for the
   structural sharing the HAMT gives you on every write.
+
+## Installation and usage
+
+### Requirements
+
+- **Node.js** ≥ 18
+- **ReScript** ≥ 12.0.0-alpha.13
+- **`@rescript/core`** ≥ 1.6.0 opened globally (i.e. `compiler-flags: ["-open RescriptCore"]` in `rescript.json`)
+
+`rescript` and `@rescript/core` are declared as `peerDependencies` — your
+project should already have them.
+
+### Install
+
+With pnpm:
+
+```sh
+pnpm add res-ds
+```
+
+With npm:
+
+```sh
+npm install res-ds
+```
+
+With yarn:
+
+```sh
+yarn add res-ds
+```
+
+Then add `"res-ds"` to the `bs-dependencies` array of your `rescript.json` so
+the ReScript compiler can see its `.res` / `.resi` files:
+
+```json
+{
+  "bs-dependencies": ["@rescript/core", "res-ds"]
+}
+```
+
+### Import
+
+`res-ds` is a barrel module — pull the collections you need off the top-level
+`ResDs` module:
+
+```rescript
+module V = ResDs.Vector
+module M = ResDs.HashMap
+module S = ResDs.HashSet
+module H = ResDs.Hash
+```
+
+Subpath imports are also exported for JS consumers:
+
+```js
+import * as Vector  from "res-ds/Vector"
+import * as HashMap from "res-ds/HashMap"
+import * as HashSet from "res-ds/HashSet"
+import * as Hash    from "res-ds/Hash"
+```
+
+### Usage
+
+#### Persistent vector
+
+```rescript
+module V = ResDs.Vector
+
+let v0 = V.fromArray([1, 2, 3])
+let v1 = v0->V.push(4)->V.push(5)
+let _  = V.getExn(v1, 4)        // 5
+let v2 = V.set(v1, 0, 100)      // [100, 2, 3, 4, 5]
+let _  = V.size(v2)             // 5
+let _  = V.toArray(v2)          // [100, 2, 3, 4, 5]
+```
+
+Bulk-build via a transient (much faster for large N — see the benchmark above):
+
+```rescript
+let big = V.withTransient(V.make(), t => {
+  for i in 0 to 99_999 {
+    V.pushMut(t, i)->ignore
+  }
+  t
+})
+// `big` is an immutable Vector of 100 000 elements.
+```
+
+#### Persistent hash map
+
+```rescript
+module M = ResDs.HashMap
+
+let m0 = M.make()->M.set("a", 1)->M.set("b", 2)
+let _  = M.getExn(m0, "a")    // 1
+let _  = M.has(m0, "z")       // false
+let m1 = M.remove(m0, "a")    // {"b": 2}
+let _  = M.entries(m1)        // [("b", 2)]
+```
+
+> **Key equality is by value for primitives, by identity (`===`) for objects.**
+> Two structurally-equal but separately-constructed object keys are *different*
+> entries. See [Key equality semantics](#key-equality-semantics) above.
+
+#### Persistent hash set
+
+```rescript
+module S = ResDs.HashSet
+
+let a = S.fromArray(["x", "y"])
+let b = S.fromArray(["y", "z"])
+let _ = S.union(a, b)         // {x, y, z}
+let _ = S.intersect(a, b)     // {y}
+let _ = S.difference(a, b)    // {x}
+```
+
+#### JS-style iteration
+
+Every collection exposes a `iterator` returning a `{next: () => {value, done}}`
+object, mirroring the JS iterator protocol:
+
+```rescript
+let it = V.iterator(v1)
+let rec loop = () =>
+  switch it.next() {
+  | {done: true} => ()
+  | {value: Some(x)} => Console.log(x); loop()
+  | _ => ()
+  }
+loop()
+```
