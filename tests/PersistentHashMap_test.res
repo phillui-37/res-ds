@@ -1,0 +1,187 @@
+// PersistentHashMap_test.res
+open Vitest
+module M = PersistentHashMap
+
+describe("PersistentHashMap — basics", () => {
+  test("empty map has size 0 and missing keys return None", () => {
+    let m = M.make()
+    expect(M.size(m))->toBe(0)
+    expect(M.get(m, "missing"))->toEqual(None)
+    expect(M.has(m, "missing"))->toBe(false)
+  })
+
+  test("set / get / has round-trip", () => {
+    let m = M.make()->M.set("a", 1)->M.set("b", 2)->M.set("c", 3)
+    expect(M.size(m))->toBe(3)
+    expect(M.get(m, "a"))->toEqual(Some(1))
+    expect(M.get(m, "b"))->toEqual(Some(2))
+    expect(M.get(m, "c"))->toEqual(Some(3))
+    expect(M.has(m, "a"))->toBe(true)
+    expect(M.has(m, "z"))->toBe(false)
+  })
+
+  test("setting an existing key replaces, not grows", () => {
+    let m = M.make()->M.set("a", 1)->M.set("a", 9)
+    expect(M.size(m))->toBe(1)
+    expect(M.getExn(m, "a"))->toBe(9)
+  })
+
+  test("structural sharing: removing from a copy does not affect the original", () => {
+    let a = M.fromEntries([("a", 1), ("b", 2), ("c", 3)])
+    let b = M.remove(a, "b")
+    expect(M.has(a, "b"))->toBe(true)
+    expect(M.has(b, "b"))->toBe(false)
+    expect(M.size(a))->toBe(3)
+    expect(M.size(b))->toBe(2)
+  })
+
+  test("remove on non-existent key is a no-op (returns same map)", () => {
+    let a = M.fromEntries([("a", 1)])
+    let b = M.remove(a, "z")
+    expect(M.size(b))->toBe(1)
+    expect(b === a)->toBe(true)
+  })
+
+  test("large random insert / lookup (10 000 string keys)", () => {
+    let n = 10_000
+    let m = ref(M.make())
+    for i in 0 to n - 1 {
+      m := M.set(m.contents, "key-" ++ Int.toString(i), i)
+    }
+    expect(M.size(m.contents))->toBe(n)
+    for i in 0 to n - 1 {
+      expect(M.getExn(m.contents, "key-" ++ Int.toString(i)))->toBe(i)
+    }
+    // remove half
+    for i in 0 to n / 2 - 1 {
+      m := M.remove(m.contents, "key-" ++ Int.toString(i))
+    }
+    expect(M.size(m.contents))->toBe(n / 2)
+    expect(M.get(m.contents, "key-0"))->toEqual(None)
+    expect(M.getExn(m.contents, "key-" ++ Int.toString(n - 1)))->toBe(n - 1)
+  })
+
+  test("keys/values/entries sizes match", () => {
+    let m = M.fromEntries([("x", 1), ("y", 2), ("z", 3)])
+    expect(Array.length(M.keys(m)))->toBe(3)
+    expect(Array.length(M.values(m)))->toBe(3)
+    expect(Array.length(M.entries(m)))->toBe(3)
+  })
+
+  test("forEach visits every entry exactly once", () => {
+    let m = M.fromEntries([("a", 1), ("b", 2), ("c", 3), ("d", 4)])
+    let total = ref(0)
+    M.forEach(m, (_, v) => total := total.contents + v)
+    expect(total.contents)->toBe(10)
+  })
+
+  test("iterator yields all entries", () => {
+    let n = 200
+    let pairs = Array.fromInitializer(~length=n, i => ("k" ++ Int.toString(i), i))
+    let m = M.fromEntries(pairs)
+    let it = M.iterator(m)
+    let seen = ref(0)
+    let keep = ref(true)
+    while keep.contents {
+      let step = it.next()
+      if step.done {
+        keep := false
+      } else {
+        seen := seen.contents + 1
+      }
+    }
+    expect(seen.contents)->toBe(n)
+  })
+
+  test("merge combines two maps; right wins on conflict", () => {
+    let a = M.fromEntries([("a", 1), ("b", 2)])
+    let b = M.fromEntries([("b", 99), ("c", 3)])
+    let m = M.merge(a, b)
+    expect(M.size(m))->toBe(3)
+    expect(M.getExn(m, "a"))->toBe(1)
+    expect(M.getExn(m, "b"))->toBe(99)
+    expect(M.getExn(m, "c"))->toBe(3)
+  })
+
+  test("equals compares structurally", () => {
+    let a = M.fromEntries([("a", 1), ("b", 2)])
+    let b = M.fromEntries([("b", 2), ("a", 1)])
+    expect(M.equals(a, b, (x, y) => x == y))->toBe(true)
+    expect(M.equals(a, M.set(b, "a", 99), (x, y) => x == y))->toBe(false)
+  })
+})
+
+describe("PersistentHashMap — collision handling", () => {
+  // Force a collision by using objects whose JSON.stringify produces the same
+  // text (our generic hash falls back on stringify). Easiest: use a custom
+  // wrapper type with the same shape.
+  test("two keys with the same hash both round-trip", () => {
+    // The generic hash uses JSON.stringifyAny for objects — different
+    // objects will have different hashes, so we instead force a collision
+    // through repeatedly hashing strings until we find a clash. As that's
+    // expensive, we instead test the HashCollision path directly via the
+    // string keys "Aa" and "BB" which have the *same* Java-style 32-bit hash.
+    // (Aa: 'A'*31 + 'a' = 31*65 + 97 = 2112; BB: 31*66 + 66 = 2112.)
+    // That equality is preserved through our mix32.
+    let h1 = Hash.hashString("Aa")
+    let h2 = Hash.hashString("BB")
+    expect(h1)->toBe(h2)
+    let m = M.make()->M.set("Aa", 1)->M.set("BB", 2)
+    expect(M.size(m))->toBe(2)
+    expect(M.getExn(m, "Aa"))->toBe(1)
+    expect(M.getExn(m, "BB"))->toBe(2)
+    let m2 = M.remove(m, "Aa")
+    expect(M.size(m2))->toBe(1)
+    expect(M.get(m2, "Aa"))->toEqual(None)
+    expect(M.getExn(m2, "BB"))->toBe(2)
+  })
+
+  test("colliding and non-colliding keys coexist correctly", () => {
+    // "Aa" and "BB" share the same Java-style 32-bit hash (verified above);
+    // "AaAa" hashes to a completely different value. We mix all three so
+    // the test exercises both the HashCollision branch ("Aa"/"BB") and a
+    // regular BitmapIndexed branch ("AaAa") inside the same map.
+    let keys = ["Aa", "BB", "AaAa"]
+    expect(Hash.hashString("Aa"))->toBe(Hash.hashString("BB"))
+    expect(Hash.hashString("Aa") == Hash.hashString("AaAa"))->toBe(false)
+    let m = M.fromEntries(Array.mapWithIndex(keys, (k, i) => (k, i)))
+    expect(M.size(m))->toBe(3)
+    Array.forEachWithIndex(keys, (k, i) => expect(M.getExn(m, k))->toBe(i))
+  })
+})
+
+describe("PersistentHashMap — transients", () => {
+  test("setMut + persistent preserves correctness for 5000 entries", () => {
+    let n = 5000
+    let m = M.withTransient(M.make(), t => {
+      let cur = ref(t)
+      for i in 0 to n - 1 {
+        cur := M.setMut(cur.contents, "k" ++ Int.toString(i), i)
+      }
+      cur.contents
+    })
+    expect(M.size(m))->toBe(n)
+    for i in 0 to n - 1 {
+      expect(M.getExn(m, "k" ++ Int.toString(i)))->toBe(i)
+    }
+  })
+
+  test("transient does not affect original map", () => {
+    let original = M.fromEntries([("a", 1), ("b", 2)])
+    let extended = M.withTransient(original, t => {
+      M.setMut(t, "c", 3)->ignore
+      M.setMut(t, "d", 4)->ignore
+      t
+    })
+    expect(M.size(original))->toBe(2)
+    expect(M.size(extended))->toBe(4)
+    expect(M.has(original, "c"))->toBe(false)
+    expect(M.has(extended, "c"))->toBe(true)
+  })
+
+  test("using a transient after persistent! throws", () => {
+    let t = M.asTransient(M.fromEntries([("a", 1)]))
+    let _ = M.persistent(t)
+    expect(() => M.setMut(t, "b", 2)->ignore)->toThrow
+  })
+})
