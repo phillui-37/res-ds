@@ -10,7 +10,8 @@
     "build": "pnpm run res:build && vite build",
     "dev": "vite",
     "test": "pnpm run res:build && vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bench": "pnpm run res:build && node bench/Bench.res.mjs"
   },
   "keywords": [
     "rescript",

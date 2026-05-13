@@ -6,6 +6,11 @@
       "subdirs": true
     },
     {
+      "dir": "bench",
+      "subdirs": true,
+      "type": "dev"
+    },
+    {
       "dir": "tests",
       "subdirs": true,
       "type": "dev"
