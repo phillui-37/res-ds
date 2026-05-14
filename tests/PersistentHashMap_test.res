@@ -146,30 +146,30 @@ describe("PersistentHashMap — collision handling", () => {
 
 describe("PersistentHashMap — null/undefined key distinction", () => {
   test("null and undefined keys are distinct", () => {
-    let m = M.make()
-      ->M.set(Obj.magic(Null.null), 1)
-      ->M.set(Obj.magic(undefined), 2)
+    let m: M.t<Nullable.t<string>, int> = M.make()
+      ->M.set(Nullable.null, 1)
+      ->M.set(Nullable.undefined, 2)
     expect(M.size(m))->toBe(2)
-    expect(M.get(m, Obj.magic(Null.null)))->toEqual(Some(1))
-    expect(M.get(m, Obj.magic(undefined)))->toEqual(Some(2))
+    expect(M.get(m, Nullable.null))->toEqual(Some(1))
+    expect(M.get(m, Nullable.undefined))->toEqual(Some(2))
   })
 
   test("entries preserves the original key (null stays null, undefined stays undefined)", () => {
-    let m = M.make()->M.set(Obj.magic(Null.null), 42)
+    let m: M.t<Nullable.t<string>, int> = M.make()->M.set(Nullable.null, 42)
     let es = M.entries(m)
     expect(Array.length(es))->toBe(1)
     let (k, v) = Array.getUnsafe(es, 0)
-    expect(Obj.magic(k) === Obj.magic(Null.null))->toBe(true)
+    expect(k === Nullable.null)->toBe(true)
     expect(v)->toBe(42)
   })
 
   test("remove null does not remove undefined", () => {
-    let m = M.make()
-      ->M.set(Obj.magic(Null.null), 1)
-      ->M.set(Obj.magic(undefined), 2)
-    let m2 = M.remove(m, Obj.magic(Null.null))
-    expect(M.has(m2, Obj.magic(Null.null)))->toBe(false)
-    expect(M.get(m2, Obj.magic(undefined)))->toEqual(Some(2))
+    let m: M.t<Nullable.t<string>, int> = M.make()
+      ->M.set(Nullable.null, 1)
+      ->M.set(Nullable.undefined, 2)
+    let m2 = M.remove(m, Nullable.null)
+    expect(M.has(m2, Nullable.null))->toBe(false)
+    expect(M.get(m2, Nullable.undefined))->toEqual(Some(2))
   })
 })
 
