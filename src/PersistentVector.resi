@@ -15,6 +15,9 @@ let size: t<'a> => int
 /** Alias for {!size}. */
 let length: t<'a> => int
 
+/** True iff the vector contains no elements. */
+let isEmpty: t<'a> => bool
+
 /** O(log32 N) lookup. Returns `None` when `i` is out of bounds. */
 let get: (t<'a>, int) => option<'a>
 
@@ -25,7 +28,8 @@ let getExn: (t<'a>, int) => 'a
 let push: (t<'a>, 'a) => t<'a>
 
 /** Returns a new vector with element `i` replaced by `x`.
-    Throws `Invalid_argument` if `i` is out of `[0, size)`. */
+    If `i == size`, equivalent to {!push} (appends `x`).
+    Throws `Invalid_argument` if `i` is out of `[0, size]`. */
 let set: (t<'a>, int, 'a) => t<'a>
 
 /** Returns a new vector with the last element removed.
@@ -65,6 +69,39 @@ type iter<'a> = {next: unit => iterStep<'a>}
 /** Build a JS-style iterator over the vector's elements. */
 let iterator: t<'a> => iter<'a>
 
+/** O(1). First element, or `None` if empty. */
+let first: t<'a> => option<'a>
+
+/** O(1). Last element, or `None` if empty. */
+let last: t<'a> => option<'a>
+
+/** O(1). First element. Throws `Not_found` if empty. */
+let firstExn: t<'a> => 'a
+
+/** O(1). Last element. Throws `Not_found` if empty. */
+let lastExn: t<'a> => 'a
+
+/** Returns a new vector containing elements in `[start, end_)`.
+    Indices are clamped to `[0, size]`; an empty vector is returned when
+    `start >= end_`. */
+let slice: (t<'a>, int, int) => t<'a>
+
+/** Returns a new vector with all elements of `b` appended to `a`.
+    Uses a transient builder — O(|b| log32 N) amortised. */
+let concat: (t<'a>, t<'a>) => t<'a>
+
+/** Returns the first element satisfying `f`, or `None`. */
+let find: (t<'a>, 'a => bool) => option<'a>
+
+/** Returns the index of the first element satisfying `f`, or `None`. */
+let findIndex: (t<'a>, 'a => bool) => option<int>
+
+/** True iff any element satisfies `f`. Always `false` on empty vector. */
+let some: (t<'a>, 'a => bool) => bool
+
+/** True iff every element satisfies `f`. Always `true` on empty vector (vacuous). */
+let every: (t<'a>, 'a => bool) => bool
+
 // ───────────────────────── transient (mutable) builder ─────────────────────────
 
 /** Opaque transient (in-place mutable) vector. Use only between {!asTransient}
@@ -77,7 +114,8 @@ let asTransient: t<'a> => transient<'a>
 /** Append `x` in place. Returns the same transient for chaining. */
 let pushMut: (transient<'a>, 'a) => transient<'a>
 
-/** Replace element `i` in place. Throws `Invalid_argument` if `i` is out of range. */
+/** Replace element `i` in place. If `i == size`, equivalent to {!pushMut}.
+    Throws `Invalid_argument` if `i` is out of `[0, size]`. */
 let setMut: (transient<'a>, int, 'a) => transient<'a>
 
 /** Look up element `i` on a transient. */

@@ -2,6 +2,8 @@
 
 import * as Hash from "./Hash.res.mjs";
 import * as Core__Array from "@rescript/core/src/Core__Array.res.mjs";
+import * as Core__Option from "@rescript/core/src/Core__Option.res.mjs";
+import * as Primitive_object from "@rescript/runtime/lib/es6/Primitive_object.js";
 import * as Primitive_option from "@rescript/runtime/lib/es6/Primitive_option.js";
 
 let noEdit = {
@@ -17,13 +19,17 @@ function make() {
       bitmap: 0,
       array: []
     },
-    hasNullKey: false,
-    nullValue: undefined
+    nullEntry: undefined,
+    undefinedEntry: undefined
   };
 }
 
 function size(m) {
   return m.size;
+}
+
+function isEmpty(m) {
+  return m.size === 0;
 }
 
 function nodeFind(_n, _shift, hash, key) {
@@ -69,17 +75,11 @@ function nodeFind(_n, _shift, hash, key) {
   };
 }
 
-function isNullKey(k) {
-  if (k === null) {
-    return true;
-  } else {
-    return typeof k === "undefined";
-  }
-}
-
 function get(m, key) {
-  if (isNullKey(key)) {
-    return m.nullValue;
+  if (key === null) {
+    return Core__Option.map(m.nullEntry, param => param[1]);
+  } else if (typeof key === "undefined") {
+    return Core__Option.map(m.undefinedEntry, param => param[1]);
   } else {
     return nodeFind(m.root, 0, Hash.hash(key), key);
   }
@@ -97,8 +97,10 @@ function getExn(m, key) {
 }
 
 function has(m, key) {
-  if (isNullKey(key)) {
-    return m.hasNullKey;
+  if (key === null) {
+    return Core__Option.isSome(m.nullEntry);
+  } else if (typeof key === "undefined") {
+    return Core__Option.isSome(m.undefinedEntry);
   } else {
     return nodeFind(m.root, 0, Hash.hash(key), key) !== undefined;
   }
@@ -323,18 +325,59 @@ function nodeAssoc(_n, shift, hash, key, value, addedLeaf) {
 }
 
 function set(m, key, value) {
-  if (isNullKey(key)) {
-    let already = m.hasNullKey;
-    let v = m.nullValue;
-    let sameVal = v !== undefined ? Hash.equals(Primitive_option.valFromOption(v), value) : false;
-    if (already && sameVal) {
-      return m;
+  if (key === null) {
+    let match = m.nullEntry;
+    if (match !== undefined) {
+      if (Primitive_object.equal(match[1], value)) {
+        return m;
+      } else {
+        return {
+          size: m.size,
+          root: m.root,
+          nullEntry: [
+            key,
+            value
+          ],
+          undefinedEntry: m.undefinedEntry
+        };
+      }
     } else {
       return {
-        size: already ? m.size : m.size + 1 | 0,
+        size: m.size + 1 | 0,
         root: m.root,
-        hasNullKey: true,
-        nullValue: Primitive_option.some(value)
+        nullEntry: [
+          key,
+          value
+        ],
+        undefinedEntry: m.undefinedEntry
+      };
+    }
+  }
+  if (typeof key === "undefined") {
+    let match$1 = m.undefinedEntry;
+    if (match$1 !== undefined) {
+      if (Primitive_object.equal(match$1[1], value)) {
+        return m;
+      } else {
+        return {
+          size: m.size,
+          root: m.root,
+          nullEntry: m.nullEntry,
+          undefinedEntry: [
+            key,
+            value
+          ]
+        };
+      }
+    } else {
+      return {
+        size: m.size + 1 | 0,
+        root: m.root,
+        nullEntry: m.nullEntry,
+        undefinedEntry: [
+          key,
+          value
+        ]
       };
     }
   }
@@ -348,8 +391,8 @@ function set(m, key, value) {
     return {
       size: added.contents ? m.size + 1 | 0 : m.size,
       root: newRoot,
-      hasNullKey: m.hasNullKey,
-      nullValue: m.nullValue
+      nullEntry: m.nullEntry,
+      undefinedEntry: m.undefinedEntry
     };
   }
 }
@@ -464,28 +507,34 @@ function nodeWithout(n, shift, hash, key, removed) {
 }
 
 function remove(m, key) {
-  if (isNullKey(key)) {
-    if (m.hasNullKey) {
-      return {
-        size: m.size - 1 | 0,
-        root: m.root,
-        hasNullKey: false,
-        nullValue: undefined
-      };
-    } else {
-      return m;
-    }
+  if (key === null) {
+    let removed = Core__Option.isSome(m.nullEntry) ? 1 : 0;
+    return {
+      size: m.size - removed | 0,
+      root: m.root,
+      nullEntry: undefined,
+      undefinedEntry: m.undefinedEntry
+    };
   }
-  let removed = {
+  if (typeof key === "undefined") {
+    let removed$1 = Core__Option.isSome(m.undefinedEntry) ? 1 : 0;
+    return {
+      size: m.size - removed$1 | 0,
+      root: m.root,
+      nullEntry: m.nullEntry,
+      undefinedEntry: undefined
+    };
+  }
+  let removed$2 = {
     contents: false
   };
-  let newRoot = nodeWithout(m.root, 0, Hash.hash(key), key, removed);
-  if (removed.contents) {
+  let newRoot = nodeWithout(m.root, 0, Hash.hash(key), key, removed$2);
+  if (removed$2.contents) {
     return {
       size: m.size - 1 | 0,
       root: newRoot,
-      hasNullKey: m.hasNullKey,
-      nullValue: m.nullValue
+      nullEntry: m.nullEntry,
+      undefinedEntry: m.undefinedEntry
     };
   } else {
     return m;
@@ -511,11 +560,13 @@ function nodeForEach(n, f) {
 }
 
 function forEach(m, f) {
-  if (m.hasNullKey) {
-    let v = m.nullValue;
-    if (v !== undefined) {
-      f(null, Primitive_option.valFromOption(v));
-    }
+  let match = m.nullEntry;
+  if (match !== undefined) {
+    f(match[0], match[1]);
+  }
+  let match$1 = m.undefinedEntry;
+  if (match$1 !== undefined) {
+    f(match$1[0], match$1[1]);
   }
   nodeForEach(m.root, f);
 }
@@ -567,28 +618,80 @@ function fromEntries(entries) {
   return m.contents;
 }
 
+function nodeArray(node) {
+  return node.array;
+}
+
 function iterator(m) {
-  let buffer = entries(m);
-  let len = buffer.length;
-  let i = {
-    contents: 0
+  let nullDone = {
+    contents: false
   };
-  let next = () => {
-    if (i.contents >= len) {
-      return {
-        value: undefined,
-        done: true
-      };
-    }
-    let pair = buffer[i.contents];
-    i.contents = i.contents + 1 | 0;
-    return {
-      value: pair,
-      done: false
+  let undefDone = {
+    contents: false
+  };
+  let stack = [];
+  let stackIdxs = [];
+  let rootArr = nodeArray(m.root);
+  if (rootArr.length > 0) {
+    stack.push(rootArr);
+    stackIdxs.push(0);
+  }
+  let advance = () => {
+    while (true) {
+      if (nullDone.contents) {
+        if (undefDone.contents) {
+          let depth = stack.length;
+          if (depth === 0) {
+            return {
+              value: undefined,
+              done: true
+            };
+          }
+          let arr = stack[depth - 1 | 0];
+          let idx = stackIdxs[depth - 1 | 0];
+          if (idx >= arr.length) {
+            stack.pop();
+            stackIdxs.pop();
+            continue;
+          }
+          stackIdxs[depth - 1 | 0] = idx + 1 | 0;
+          let child = arr[idx];
+          if (child.TAG === "KV") {
+            return {
+              value: [
+                child._0,
+                child._1
+              ],
+              done: false
+            };
+          }
+          stack.push(nodeArray(child._0));
+          stackIdxs.push(0);
+          continue;
+        }
+        undefDone.contents = true;
+        let pair = m.undefinedEntry;
+        if (pair !== undefined) {
+          return {
+            value: pair,
+            done: false
+          };
+        }
+        continue;
+      }
+      nullDone.contents = true;
+      let pair$1 = m.nullEntry;
+      if (pair$1 !== undefined) {
+        return {
+          value: pair$1,
+          done: false
+        };
+      }
+      continue;
     };
   };
   return {
-    next: next
+    next: advance
   };
 }
 
@@ -596,8 +699,8 @@ function asTransient(m) {
   return {
     size: m.size,
     root: m.root,
-    hasNullKey: m.hasNullKey,
-    nullValue: m.nullValue,
+    nullEntry: m.nullEntry,
+    undefinedEntry: m.undefinedEntry,
     edit: {
       owned: true
     }
@@ -778,12 +881,24 @@ function nodeAssocMut(ownEdit, _n, shift, hash, key, value, addedLeaf) {
 
 function setMut(t, key, value) {
   ensureEditable(t);
-  if (isNullKey(key)) {
-    if (!t.hasNullKey) {
+  if (key === null) {
+    if (Core__Option.isNone(t.nullEntry)) {
       t.size = t.size + 1 | 0;
     }
-    t.hasNullKey = true;
-    t.nullValue = Primitive_option.some(value);
+    t.nullEntry = [
+      key,
+      value
+    ];
+    return t;
+  }
+  if (typeof key === "undefined") {
+    if (Core__Option.isNone(t.undefinedEntry)) {
+      t.size = t.size + 1 | 0;
+    }
+    t.undefinedEntry = [
+      key,
+      value
+    ];
     return t;
   }
   let added = {
@@ -799,10 +914,16 @@ function setMut(t, key, value) {
 
 function removeMut(t, key) {
   ensureEditable(t);
-  if (isNullKey(key)) {
-    if (t.hasNullKey) {
-      t.hasNullKey = false;
-      t.nullValue = undefined;
+  if (key === null) {
+    if (Core__Option.isSome(t.nullEntry)) {
+      t.nullEntry = undefined;
+      t.size = t.size - 1 | 0;
+    }
+    return t;
+  }
+  if (typeof key === "undefined") {
+    if (Core__Option.isSome(t.undefinedEntry)) {
+      t.undefinedEntry = undefined;
       t.size = t.size - 1 | 0;
     }
     return t;
@@ -820,8 +941,10 @@ function removeMut(t, key) {
 
 function getMut(t, key) {
   ensureEditable(t);
-  if (isNullKey(key)) {
-    return t.nullValue;
+  if (key === null) {
+    return Core__Option.map(t.nullEntry, param => param[1]);
+  } else if (typeof key === "undefined") {
+    return Core__Option.map(t.undefinedEntry, param => param[1]);
   } else {
     return nodeFind(t.root, 0, Hash.hash(key), key);
   }
@@ -833,8 +956,8 @@ function persistent(t) {
   return {
     size: t.size,
     root: t.root,
-    hasNullKey: t.hasNullKey,
-    nullValue: t.nullValue
+    nullEntry: t.nullEntry,
+    undefinedEntry: t.undefinedEntry
   };
 }
 
@@ -868,9 +991,41 @@ function merge(a, b) {
   }), t));
 }
 
+function map(m, f) {
+  let m$1 = make();
+  let t = asTransient(m$1);
+  return persistent((forEach(m, (k, v) => {
+    setMut(t, k, f(v));
+  }), t));
+}
+
+function filter(m, f) {
+  let m$1 = make();
+  let t = asTransient(m$1);
+  return persistent((forEach(m, (k, v) => {
+    if (f(k, v)) {
+      setMut(t, k, v);
+      return;
+    }
+  }), t));
+}
+
+function update(m, key, f) {
+  let current = get(m, key);
+  let v = f(current);
+  if (v !== undefined) {
+    return set(m, key, Primitive_option.valFromOption(v));
+  } else if (current !== undefined) {
+    return remove(m, key);
+  } else {
+    return m;
+  }
+}
+
 export {
   make,
   size,
+  isEmpty,
   get,
   getExn,
   has,
@@ -885,6 +1040,9 @@ export {
   iterator,
   equals,
   merge,
+  map,
+  filter,
+  update,
   asTransient,
   setMut,
   removeMut,

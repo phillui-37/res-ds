@@ -64,4 +64,67 @@ describe("PersistentHashSet — basics", () => {
     }
     expect(count.contents)->toBe(5)
   })
+
+  test("isEmpty returns true for empty set", () => {
+    expect(S.isEmpty(S.make()))->toBe(true)
+    expect(S.isEmpty(S.add(S.make(), 1)))->toBe(false)
+  })
+})
+
+describe("PersistentHashSet — equals/subset/superset/filter/map", () => {
+  test("equals returns true for identical content", () => {
+    let a = S.fromArray([1, 2, 3])
+    let b = S.fromArray([3, 1, 2])
+    expect(S.equals(a, b))->toBe(true)
+  })
+
+  test("equals returns false when content differs", () => {
+    let a = S.fromArray([1, 2, 3])
+    let b = S.fromArray([1, 2, 4])
+    expect(S.equals(a, b))->toBe(false)
+    expect(S.equals(S.fromArray([1, 2]), S.fromArray([1, 2, 3])))->toBe(false)
+  })
+
+  test("isSubsetOf", () => {
+    let a = S.fromArray([1, 2])
+    let b = S.fromArray([1, 2, 3])
+    expect(S.isSubsetOf(a, b))->toBe(true)
+    expect(S.isSubsetOf(b, a))->toBe(false)
+    expect(S.isSubsetOf(a, a))->toBe(true)
+  })
+
+  test("isSupersetOf", () => {
+    let a = S.fromArray([1, 2, 3])
+    let b = S.fromArray([1, 2])
+    expect(S.isSupersetOf(a, b))->toBe(true)
+    expect(S.isSupersetOf(b, a))->toBe(false)
+  })
+
+  test("filter keeps only matching elements", () => {
+    let s = S.fromArray([1, 2, 3, 4, 5])
+    let even = S.filter(s, x => Int.mod(x, 2) == 0)
+    expect(S.size(even))->toBe(2)
+    expect(S.has(even, 2))->toBe(true)
+    expect(S.has(even, 1))->toBe(false)
+  })
+
+  test("map transforms elements", () => {
+    let s = S.fromArray([1, 2, 3])
+    let doubled = S.map(s, x => x * 2)
+    expect(S.has(doubled, 2))->toBe(true)
+    expect(S.has(doubled, 4))->toBe(true)
+    expect(S.has(doubled, 6))->toBe(true)
+    expect(S.size(doubled))->toBe(3)
+  })
+
+  test("empty set edge cases", () => {
+    let empty = S.make()
+    let nonEmpty = S.fromArray([1, 2, 3])
+    expect(S.equals(empty, empty))->toBe(true)
+    expect(S.isSubsetOf(empty, nonEmpty))->toBe(true)
+    expect(S.isSubsetOf(empty, empty))->toBe(true)
+    expect(S.isSupersetOf(nonEmpty, empty))->toBe(true)
+    expect(S.size(S.filter(empty, _ => true)))->toBe(0)
+    expect(S.size(S.map(empty, x => x)))->toBe(0)
+  })
 })

@@ -9,6 +9,7 @@ type t<'a> = M.t<'a, unit>
 let make = (): t<'a> => M.make()
 
 let size = (s: t<'a>): int => M.size(s)
+let isEmpty = (s: t<'a>): bool => M.isEmpty(s)
 let has = (s: t<'a>, x: 'a): bool => M.has(s, x)
 let add = (s: t<'a>, x: 'a): t<'a> => M.set(s, x, ())
 let remove = (s: t<'a>, x: 'a): t<'a> => M.remove(s, x)
@@ -53,17 +54,18 @@ type iterStep<'a> = {value: option<'a>, done: bool}
 type iter<'a> = {next: unit => iterStep<'a>}
 
 let iterator = (s: t<'a>): iter<'a> => {
-  let buffer = toArray(s)
-  let len = Array.length(buffer)
-  let i = ref(0)
-  let next = () =>
-    if i.contents >= len {
+  let inner = M.iterator(s)
+  let next = () => {
+    let step = inner.next()
+    if step.done {
       {value: None, done: true}
     } else {
-      let x = Array.getUnsafe(buffer, i.contents)
-      i := i.contents + 1
-      {value: Some(x), done: false}
+      switch step.value {
+      | Some((k, _)) => {value: Some(k), done: false}
+      | None => {value: None, done: true}
+      }
     }
+  }
   {next: next}
 }
 
@@ -82,3 +84,39 @@ let hasMut = (t: transient<'a>, x: 'a): bool =>
 let persistent = (t: transient<'a>): t<'a> => M.persistent(t)
 let withTransient = (s: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
   s->asTransient->f->persistent
+
+// ───────────────────────── comparison and filtering ─────────────────────────
+
+let isSubsetOf = (a: t<'a>, b: t<'a>): bool =>
+  if M.size(a) > M.size(b) {
+    false
+  } else {
+    let isSubset = ref(true)
+    forEach(a, x =>
+      if isSubset.contents && !has(b, x) {
+        isSubset := false
+      }
+    )
+    isSubset.contents
+  }
+
+let equals = (a: t<'a>, b: t<'a>): bool =>
+  M.size(a) == M.size(b) && isSubsetOf(a, b)
+
+let isSupersetOf = (a: t<'a>, b: t<'a>): bool => isSubsetOf(b, a)
+
+let filter = (s: t<'a>, f: 'a => bool): t<'a> =>
+  M.withTransient(make(), t => {
+    forEach(s, x =>
+      if f(x) {
+        M.setMut(t, x, ())->ignore
+      }
+    )
+    t
+  })
+
+let map = (s: t<'a>, f: 'a => 'b): t<'b> =>
+  M.withTransient(make(), t => {
+    forEach(s, x => M.setMut(t, f(x), ())->ignore)
+    t
+  })

@@ -13,6 +13,9 @@ let make: unit => t<'k, 'v>
 /** Number of entries. */
 let size: t<'k, 'v> => int
 
+/** True iff the map contains no entries. */
+let isEmpty: t<'k, 'v> => bool
+
 /** O(log32 N) lookup. */
 let get: (t<'k, 'v>, 'k) => option<'v>
 
@@ -62,6 +65,17 @@ let equals: (t<'k, 'v>, t<'k, 'v>, ('v, 'v) => bool) => bool
 
 /** Right-biased merge: entries from `b` override those from `a`. */
 let merge: (t<'k, 'v>, t<'k, 'v>) => t<'k, 'v>
+
+/** Returns a new map with all values transformed by `f`. Keys are preserved. */
+let map: (t<'k, 'v>, 'v => 'w) => t<'k, 'w>
+
+/** Returns a new map containing only entries for which `f(key, value)` is true. */
+let filter: (t<'k, 'v>, ('k, 'v) => bool) => t<'k, 'v>
+
+/** Update a key based on its current optional value.
+    `f` receives `Some(v)` if the key exists, `None` if absent.
+    Return `Some(newV)` to insert/replace, `None` to delete. */
+let update: (t<'k, 'v>, 'k, option<'v> => option<'v>) => t<'k, 'v>
 
 // ───────────────────────── transient (mutable) builder ─────────────────────────
 

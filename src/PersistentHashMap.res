@@ -36,20 +36,20 @@ let emptyNode = (): node<'k, 'v> =>
 type t<'k, 'v> = {
   size: int,
   root: node<'k, 'v>,
-  // We treat `null`-key (`undefined` value) as a special slot stored on the
-  // map itself, mirroring Clojure's `nil`-key handling.
-  hasNullKey: bool,
-  nullValue: option<'v>,
+  // null and undefined keys stored in distinct slots to preserve key identity.
+  nullEntry: option<('k, 'v)>,
+  undefinedEntry: option<('k, 'v)>,
 }
 
 let make = (): t<'k, 'v> => {
   size: 0,
   root: emptyNode(),
-  hasNullKey: false,
-  nullValue: None,
+  nullEntry: None,
+  undefinedEntry: None,
 }
 
 let size = (m: t<'k, 'v>): int => m.size
+let isEmpty = (m: t<'k, 'v>): bool => m.size == 0
 
 // ───────────────────────── lookup ─────────────────────────
 
@@ -87,11 +87,14 @@ let rec nodeFind = (n: node<'k, 'v>, shift: int, hash: int, key: 'k): option<'v>
     }
   }
 
-let isNullKey: 'k => bool = k => Obj.magic(k) === Obj.magic(Null.null) || Type.typeof(k) == #undefined
+let isNull: 'k => bool = k => Obj.magic(k) === Obj.magic(Null.null)
+let isUndefined: 'k => bool = k => Type.typeof(k) == #undefined
 
 let get = (m: t<'k, 'v>, key: 'k): option<'v> =>
-  if isNullKey(key) {
-    m.nullValue
+  if isNull(key) {
+    m.nullEntry->Option.map(((_, v)) => v)
+  } else if isUndefined(key) {
+    m.undefinedEntry->Option.map(((_, v)) => v)
   } else {
     nodeFind(m.root, 0, Hash.hash(key), key)
   }
@@ -103,8 +106,10 @@ let getExn = (m: t<'k, 'v>, key: 'k): 'v =>
   }
 
 let has = (m: t<'k, 'v>, key: 'k): bool =>
-  if isNullKey(key) {
-    m.hasNullKey
+  if isNull(key) {
+    Option.isSome(m.nullEntry)
+  } else if isUndefined(key) {
+    Option.isSome(m.undefinedEntry)
   } else {
     switch nodeFind(m.root, 0, Hash.hash(key), key) {
     | Some(_) => true
@@ -275,21 +280,17 @@ let rec nodeAssoc = (
   }
 
 let set = (m: t<'k, 'v>, key: 'k, value: 'v): t<'k, 'v> =>
-  if isNullKey(key) {
-    let already = m.hasNullKey
-    let sameVal = switch m.nullValue {
-    | Some(v) => Hash.equals(v, value)
-    | None => false
+  if isNull(key) {
+    switch m.nullEntry {
+    | Some((_, existingValue)) when existingValue == value => m
+    | Some(_) => {...m, nullEntry: Some((key, value))}
+    | None => {...m, size: m.size + 1, nullEntry: Some((key, value))}
     }
-    if already && sameVal {
-      m
-    } else {
-      {
-        ...m,
-        size: already ? m.size : m.size + 1,
-        hasNullKey: true,
-        nullValue: Some(value),
-      }
+  } else if isUndefined(key) {
+    switch m.undefinedEntry {
+    | Some((_, existingValue)) when existingValue == value => m
+    | Some(_) => {...m, undefinedEntry: Some((key, value))}
+    | None => {...m, size: m.size + 1, undefinedEntry: Some((key, value))}
     }
   } else {
     let added = mkFlag()
@@ -399,12 +400,12 @@ let rec nodeWithout = (
   }
 
 let remove = (m: t<'k, 'v>, key: 'k): t<'k, 'v> =>
-  if isNullKey(key) {
-    if m.hasNullKey {
-      {...m, size: m.size - 1, hasNullKey: false, nullValue: None}
-    } else {
-      m
-    }
+  if isNull(key) {
+    let removed = Option.isSome(m.nullEntry) ? 1 : 0
+    {...m, size: m.size - removed, nullEntry: None}
+  } else if isUndefined(key) {
+    let removed = Option.isSome(m.undefinedEntry) ? 1 : 0
+    {...m, size: m.size - removed, undefinedEntry: None}
   } else {
     let removed = mkFlag()
     let newRoot = nodeWithout(m.root, 0, Hash.hash(key), key, removed)
@@ -430,11 +431,13 @@ let rec nodeForEach = (n: node<'k, 'v>, f: ('k, 'v) => unit): unit =>
   }
 
 let forEach = (m: t<'k, 'v>, f: ('k, 'v) => unit): unit => {
-  if m.hasNullKey {
-    switch m.nullValue {
-    | Some(v) => f(Obj.magic(Null.null), v)
-    | None => ()
-    }
+  switch m.nullEntry {
+  | Some((k, v)) => f(k, v)
+  | None => ()
+  }
+  switch m.undefinedEntry {
+  | Some((k, v)) => f(k, v)
+  | None => ()
   }
   nodeForEach(m.root, f)
 }
@@ -473,19 +476,60 @@ let fromEntries = (entries: array<('k, 'v)>): t<'k, 'v> => {
 type iterStep<'a> = {value: option<'a>, done: bool}
 type iter<'a> = {next: unit => iterStep<'a>}
 
+let nodeArray = (node: node<'k, 'v>): array<entry<'k, 'v>> =>
+  switch node {
+  | BitmapIndexed({array}) | HashCollision({array}) => array
+  }
+
 let iterator = (m: t<'k, 'v>): iter<('k, 'v)> => {
-  let buffer = entries(m)
-  let len = Array.length(buffer)
-  let i = ref(0)
-  let next = () =>
-    if i.contents >= len {
-      {value: None, done: true}
+  let nullDone = ref(false)
+  let undefDone = ref(false)
+  let stack: array<array<entry<'k, 'v>>> = []
+  let stackIdxs: array<int> = []
+  // Seed trie lazily at construction time (O(1) — just push the root array).
+  let rootArr = nodeArray(m.root)
+  if Array.length(rootArr) > 0 {
+    Array.push(stack, rootArr)
+    Array.push(stackIdxs, 0)
+  }
+  let rec advance = (): iterStep<('k, 'v)> => {
+    if !nullDone.contents {
+      nullDone := true
+      switch m.nullEntry {
+      | Some(pair) => {value: Some(pair), done: false}
+      | None => advance()
+      }
+    } else if !undefDone.contents {
+      undefDone := true
+      switch m.undefinedEntry {
+      | Some(pair) => {value: Some(pair), done: false}
+      | None => advance()
+      }
     } else {
-      let pair = Array.getUnsafe(buffer, i.contents)
-      i := i.contents + 1
-      {value: Some(pair), done: false}
+      let depth = Array.length(stack)
+      if depth == 0 {
+        {value: None, done: true}
+      } else {
+        let arr = Array.getUnsafe(stack, depth - 1)
+        let idx = Array.getUnsafe(stackIdxs, depth - 1)
+        if idx >= Array.length(arr) {
+          let _ = Array.pop(stack)
+          let _ = Array.pop(stackIdxs)
+          advance()
+        } else {
+          Array.setUnsafe(stackIdxs, depth - 1, idx + 1)
+          switch Array.getUnsafe(arr, idx) {
+          | KV(k, v) => {value: Some((k, v)), done: false}
+          | Sub(child) =>
+            Array.push(stack, nodeArray(child))
+            Array.push(stackIdxs, 0)
+            advance()
+          }
+        }
+      }
     }
-  {next: next}
+  }
+  {next: advance}
 }
 
 // ───────────────────────── transient (in-place mutable) ─────────────────────────
@@ -493,16 +537,16 @@ let iterator = (m: t<'k, 'v>): iter<('k, 'v)> => {
 type transient<'k, 'v> = {
   mutable size: int,
   mutable root: node<'k, 'v>,
-  mutable hasNullKey: bool,
-  mutable nullValue: option<'v>,
+  mutable nullEntry: option<('k, 'v)>,
+  mutable undefinedEntry: option<('k, 'v)>,
   edit: edit,
 }
 
 let asTransient = (m: t<'k, 'v>): transient<'k, 'v> => {
   size: m.size,
   root: m.root,
-  hasNullKey: m.hasNullKey,
-  nullValue: m.nullValue,
+  nullEntry: m.nullEntry,
+  undefinedEntry: m.undefinedEntry,
   edit: {owned: true},
 }
 
@@ -636,12 +680,17 @@ let rec nodeAssocMut = (
 
 let setMut = (t: transient<'k, 'v>, key: 'k, value: 'v): transient<'k, 'v> => {
   ensureEditable(t)
-  if isNullKey(key) {
-    if !t.hasNullKey {
+  if isNull(key) {
+    if Option.isNone(t.nullEntry) {
       t.size = t.size + 1
     }
-    t.hasNullKey = true
-    t.nullValue = Some(value)
+    t.nullEntry = Some((key, value))
+    t
+  } else if isUndefined(key) {
+    if Option.isNone(t.undefinedEntry) {
+      t.size = t.size + 1
+    }
+    t.undefinedEntry = Some((key, value))
     t
   } else {
     let added = mkFlag()
@@ -656,10 +705,15 @@ let setMut = (t: transient<'k, 'v>, key: 'k, value: 'v): transient<'k, 'v> => {
 
 let removeMut = (t: transient<'k, 'v>, key: 'k): transient<'k, 'v> => {
   ensureEditable(t)
-  if isNullKey(key) {
-    if t.hasNullKey {
-      t.hasNullKey = false
-      t.nullValue = None
+  if isNull(key) {
+    if Option.isSome(t.nullEntry) {
+      t.nullEntry = None
+      t.size = t.size - 1
+    }
+    t
+  } else if isUndefined(key) {
+    if Option.isSome(t.undefinedEntry) {
+      t.undefinedEntry = None
       t.size = t.size - 1
     }
     t
@@ -679,8 +733,10 @@ let removeMut = (t: transient<'k, 'v>, key: 'k): transient<'k, 'v> => {
 
 let getMut = (t: transient<'k, 'v>, key: 'k): option<'v> => {
   ensureEditable(t)
-  if isNullKey(key) {
-    t.nullValue
+  if isNull(key) {
+    t.nullEntry->Option.map(((_, v)) => v)
+  } else if isUndefined(key) {
+    t.undefinedEntry->Option.map(((_, v)) => v)
   } else {
     nodeFind(t.root, 0, Hash.hash(key), key)
   }
@@ -689,7 +745,7 @@ let getMut = (t: transient<'k, 'v>, key: 'k): option<'v> => {
 let persistent = (t: transient<'k, 'v>): t<'k, 'v> => {
   ensureEditable(t)
   t.edit.owned = false
-  {size: t.size, root: t.root, hasNullKey: t.hasNullKey, nullValue: t.nullValue}
+  {size: t.size, root: t.root, nullEntry: t.nullEntry, undefinedEntry: t.undefinedEntry}
 }
 
 let withTransient = (m: t<'k, 'v>, f: transient<'k, 'v> => transient<'k, 'v>): t<'k, 'v> =>
@@ -719,3 +775,31 @@ let merge = (a: t<'k, 'v>, b: t<'k, 'v>): t<'k, 'v> =>
     forEach(b, (k, v) => setMut(t, k, v)->ignore)
     t
   })
+
+let map = (m: t<'k, 'v>, f: 'v => 'w): t<'k, 'w> =>
+  withTransient(make(), t => {
+    forEach(m, (k, v) => setMut(t, k, f(v))->ignore)
+    t
+  })
+
+let filter = (m: t<'k, 'v>, f: ('k, 'v) => bool): t<'k, 'v> =>
+  withTransient(make(), t => {
+    forEach(m, (k, v) =>
+      if f(k, v) {
+        setMut(t, k, v)->ignore
+      }
+    )
+    t
+  })
+
+let update = (m: t<'k, 'v>, key: 'k, f: option<'v> => option<'v>): t<'k, 'v> => {
+  let current = get(m, key)
+  switch f(current) {
+  | Some(v) => set(m, key, v)
+  | None =>
+    switch current {
+    | Some(_) => remove(m, key)
+    | None => m
+    }
+  }
+}

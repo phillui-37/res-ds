@@ -9,10 +9,13 @@ let HashMap;
 
 let HashSet;
 
+let PersistentQueue;
+
 export {
   Hash,
   Vector,
   HashMap,
   HashSet,
+  PersistentQueue,
 }
 /* No side effect */

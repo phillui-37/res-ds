@@ -48,6 +48,7 @@ let make = (): t<'a> => {
 
 let size = (v: t<'a>): int => v.size
 let length = size
+let isEmpty = (v: t<'a>): bool => v.size == 0
 
 // Number of elements that live in the trie (everything not in the tail).
 let tailOffset = (v: t<'a>): int =>
@@ -192,7 +193,7 @@ let rec doSet = (level: int, n: node<'a>, i: int, x: 'a): node<'a> => {
 
 let set = (v: t<'a>, i: int, x: 'a): t<'a> =>
   if i < 0 || i > v.size {
-    throw(Not_found)
+    throw(Invalid_argument("PersistentVector.set: index out of bounds"))
   } else if i == v.size {
     push(v, x)
   } else if i >= tailOffset(v) {
@@ -236,7 +237,7 @@ let rec popTail = (level: int, n: node<'a>, size: int): option<node<'a>> => {
 
 let pop = (v: t<'a>): t<'a> =>
   switch v.size {
-  | 0 => throw(Not_found)
+  | 0 => throw(Invalid_argument("PersistentVector.pop: empty vector"))
   | 1 => make()
   | _ =>
     if v.size - tailOffset(v) > 1 {
@@ -350,10 +351,12 @@ let equals = (a: t<'a>, b: t<'a>, eq: ('a, 'a) => bool): bool =>
       let bv = arrayFor(b, i.contents)
       let baseIdx = i.contents - B.land(i.contents, mask5)
       let copyLen = Math.Int.min(branching, a.size - baseIdx)
-      for j in 0 to copyLen - 1 {
-        if !eq(Array.getUnsafe(av, j), Array.getUnsafe(bv, j)) {
+      let j = ref(0)
+      while same.contents && j.contents < copyLen {
+        if !eq(Array.getUnsafe(av, j.contents), Array.getUnsafe(bv, j.contents)) {
           same := false
         }
+        j := j.contents + 1
       }
       i := baseIdx + copyLen
     }
@@ -488,7 +491,7 @@ let pushMut = (t: transient<'a>, x: 'a): transient<'a> => {
 let setMut = (t: transient<'a>, i: int, x: 'a): transient<'a> => {
   ensureEditable(t)
   if i < 0 || i > t.size {
-    throw(Not_found)
+    throw(Invalid_argument("PersistentVector.setMut: index out of bounds"))
   } else if i == t.size {
     pushMut(t, x)
   } else {
@@ -544,5 +547,104 @@ let persistent = (t: transient<'a>): t<'a> => {
 }
 
 // Convenience: build a vector via a mutable transient closure (very fast for bulk loads).
+let first = (v: t<'a>): option<'a> => get(v, 0)
+
+let last = (v: t<'a>): option<'a> => get(v, v.size - 1)
+
+let firstExn = (v: t<'a>): 'a => getExn(v, 0)
+
+let lastExn = (v: t<'a>): 'a => getExn(v, v.size - 1)
+
 let withTransient = (v: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
   v->asTransient->f->persistent
+
+let slice = (v: t<'a>, start: int, end_: int): t<'a> => {
+  let s = Math.Int.max(0, start)
+  let e = Math.Int.min(v.size, end_)
+  if s >= e {
+    make()
+  } else {
+    withTransient(make(), t => {
+      let i = ref(s)
+      while i.contents < e {
+        let block = arrayFor(v, i.contents)
+        let baseIdx = i.contents - B.land(i.contents, mask5)
+        let blockEnd = Math.Int.min(e, baseIdx + branching)
+        let j = ref(i.contents - baseIdx)
+        let jEnd = blockEnd - baseIdx
+        while j.contents < jEnd {
+          let _ = pushMut(t, Array.getUnsafe(block, j.contents))
+          j := j.contents + 1
+        }
+        i := blockEnd
+      }
+      t
+    })
+  }
+}
+
+let concat = (a: t<'a>, b: t<'a>): t<'a> =>
+  withTransient(a, t => {
+    forEach(b, x => {
+      let _ = pushMut(t, x)
+    })
+    t
+  })
+
+let find = (v: t<'a>, f: 'a => bool): option<'a> => {
+  let result = ref(None)
+  let i = ref(0)
+  while result.contents == None && i.contents < v.size {
+    let block = arrayFor(v, i.contents)
+    let copyLen = Math.Int.min(branching, v.size - i.contents)
+    let j = ref(0)
+    while result.contents == None && j.contents < copyLen {
+      let x = Array.getUnsafe(block, j.contents)
+      if f(x) {
+        result := Some(x)
+      }
+      j := j.contents + 1
+    }
+    i := i.contents + copyLen
+  }
+  result.contents
+}
+
+let findIndex = (v: t<'a>, f: 'a => bool): option<int> => {
+  let result = ref(None)
+  let i = ref(0)
+  while result.contents == None && i.contents < v.size {
+    let block = arrayFor(v, i.contents)
+    let copyLen = Math.Int.min(branching, v.size - i.contents)
+    let j = ref(0)
+    while result.contents == None && j.contents < copyLen {
+      if f(Array.getUnsafe(block, j.contents)) {
+        result := Some(i.contents + j.contents)
+      }
+      j := j.contents + 1
+    }
+    i := i.contents + copyLen
+  }
+  result.contents
+}
+
+let some = (v: t<'a>, f: 'a => bool): bool =>
+  findIndex(v, f) != None
+
+let every = (v: t<'a>, f: 'a => bool): bool => {
+  let failed = ref(false)
+  let i = ref(0)
+  while !failed.contents && i.contents < v.size {
+    let block = arrayFor(v, i.contents)
+    let copyLen = Math.Int.min(branching, v.size - i.contents)
+    let j = ref(0)
+    while !failed.contents && j.contents < copyLen {
+      if !f(Array.getUnsafe(block, j.contents)) {
+        failed := true
+      }
+      j := j.contents + 1
+    }
+    i := i.contents + copyLen
+  }
+  !failed.contents
+}

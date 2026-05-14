@@ -27,6 +27,11 @@ describe("PersistentVector — basics", () => {
     let v = V.fromArray([1, 2])
     let w = V.set(v, 2, 3)
     expect(V.toArray(w))->toEqual([1, 2, 3])
+    // Also verify for size-3 (same base as the "throws" test): size+1 and correct last element.
+    let v3 = V.fromArray([1, 2, 3])
+    let w3 = V.set(v3, 3, 42)
+    expect(V.size(w3))->toBe(4)
+    expect(V.getExn(w3, 3))->toBe(42)
   })
 
   test("pop removes the last element", () => {
@@ -34,6 +39,41 @@ describe("PersistentVector — basics", () => {
     let w = V.pop(v)
     expect(V.size(w))->toBe(2)
     expect(V.toArray(w))->toEqual([1, 2])
+  })
+
+  test("pop on empty vector throws Invalid_argument", () => {
+    let msg = ref("")
+    try { let _ = V.pop(V.make()); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.pop: empty vector")
+  })
+
+  test("set with negative index throws Invalid_argument", () => {
+    let v = V.fromArray([1, 2, 3])
+    let msg = ref("")
+    try { let _ = V.set(v, -1, 0); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.set: index out of bounds")
+  })
+
+  test("set with index > size throws Invalid_argument", () => {
+    let v = V.fromArray([1, 2, 3])
+    let msg = ref("")
+    try { let _ = V.set(v, 4, 0); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.set: index out of bounds")
+  })
+
+  test("setMut with out-of-bounds index throws Invalid_argument", () => {
+    let t = V.asTransient(V.fromArray([1, 2, 3]))
+    let msg = ref("")
+    try { let _ = V.setMut(t, -1, 0); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.setMut: index out of bounds")
   })
 
   test("toArray round-trip on a 1000-element vector (crosses tail boundary)", () => {
@@ -97,6 +137,25 @@ describe("PersistentVector — basics", () => {
   })
 })
 
+describe("PersistentVector — first/last", () => {
+  test("first/last return None on empty vector", () => {
+    let v = V.make()
+    expect(V.first(v))->toEqual(None)
+    expect(V.last(v))->toEqual(None)
+  })
+
+  test("first/last return correct elements", () => {
+    let v = V.fromArray([10, 20, 30])
+    expect(V.first(v))->toEqual(Some(10))
+    expect(V.last(v))->toEqual(Some(30))
+  })
+
+  test("firstExn/lastExn throw on empty", () => {
+    expect(() => V.firstExn(V.make()))->toThrow
+    expect(() => V.lastExn(V.make()))->toThrow
+  })
+})
+
 describe("PersistentVector — transients", () => {
   test("transient pushMut + persistent matches the persistent path", () => {
     let n = 5_000
@@ -131,5 +190,91 @@ describe("PersistentVector — transients", () => {
     let t = V.asTransient(V.fromArray([1, 2, 3]))
     let _ = V.persistent(t)
     expect(() => V.pushMut(t, 4)->ignore)->toThrow
+  })
+
+  test("equals short-circuits: comparator not called after first mismatch", () => {
+    let calls = ref(0)
+    let eq = (a, b) => {
+      calls := calls.contents + 1
+      a == b
+    }
+    let a = V.fromArray(Array.fromInitializer(~length=64, i => i))
+    let b = V.set(a, 0, -1) // differ at index 0
+    let _ = V.equals(a, b, eq)
+    // Without short-circuit the inner for-loop calls eq 32 times for the
+    // first leaf block. With short-circuit it calls eq exactly once.
+    expect(calls.contents)->toBe(1)
+  })
+
+  test("isEmpty returns true for empty vector", () => {
+    expect(V.isEmpty(V.make()))->toBe(true)
+    expect(V.isEmpty(V.fromArray([1])))->toBe(false)
+  })
+})
+
+describe("PersistentVector — slice/concat", () => {
+  test("slice returns sub-range", () => {
+    let v = V.fromArray([0, 1, 2, 3, 4])
+    expect(V.toArray(V.slice(v, 1, 4)))->toEqual([1, 2, 3])
+  })
+
+  test("slice with clamped bounds returns empty", () => {
+    let v = V.fromArray([0, 1, 2])
+    expect(V.size(V.slice(v, 5, 10)))->toBe(0)
+    expect(V.size(V.slice(v, 2, 1)))->toBe(0)
+  })
+
+  test("slice full range equals original", () => {
+    let arr = Array.fromInitializer(~length=100, i => i)
+    let v = V.fromArray(arr)
+    expect(V.toArray(V.slice(v, 0, 100)))->toEqual(arr)
+  })
+
+  test("concat two vectors", () => {
+    let a = V.fromArray([1, 2, 3])
+    let b = V.fromArray([4, 5, 6])
+    expect(V.toArray(V.concat(a, b)))->toEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  test("concat with empty is identity", () => {
+    let v = V.fromArray([1, 2, 3])
+    expect(V.toArray(V.concat(v, V.make())))->toEqual([1, 2, 3])
+    expect(V.toArray(V.concat(V.make(), v)))->toEqual([1, 2, 3])
+  })
+
+  test("concat large vectors (crosses trie boundaries)", () => {
+    let a = V.fromArray(Array.fromInitializer(~length=500, i => i))
+    let b = V.fromArray(Array.fromInitializer(~length=500, i => 500 + i))
+    let c = V.concat(a, b)
+    expect(V.size(c))->toBe(1000)
+    expect(V.getExn(c, 999))->toBe(999)
+  })
+})
+
+describe("PersistentVector — search/predicate", () => {
+  test("find returns first matching element", () => {
+    let v = V.fromArray([1, 2, 3, 4, 5])
+    expect(V.find(v, x => x > 3))->toEqual(Some(4))
+    expect(V.find(v, x => x > 10))->toEqual(None)
+  })
+
+  test("findIndex returns index of first match", () => {
+    let v = V.fromArray([10, 20, 30, 20])
+    expect(V.findIndex(v, x => x == 20))->toEqual(Some(1))
+    expect(V.findIndex(v, x => x == 99))->toEqual(None)
+  })
+
+  test("some returns true iff any element satisfies predicate", () => {
+    let v = V.fromArray([1, 2, 3])
+    expect(V.some(v, x => x > 2))->toBe(true)
+    expect(V.some(v, x => x > 10))->toBe(false)
+    expect(V.some(V.make(), _ => true))->toBe(false)
+  })
+
+  test("every returns true iff all elements satisfy predicate", () => {
+    let v = V.fromArray([2, 4, 6])
+    expect(V.every(v, x => Int.mod(x, 2) == 0))->toBe(true)
+    expect(V.every(v, x => x > 3))->toBe(false)
+    expect(V.every(V.make(), _ => false))->toBe(true)
   })
 })

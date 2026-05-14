@@ -9,6 +9,8 @@ function make() {
 
 let size = PersistentHashMap.size;
 
+let isEmpty = PersistentHashMap.isEmpty;
+
 let has = PersistentHashMap.has;
 
 function add(s, x) {
@@ -64,24 +66,27 @@ function difference(a, b) {
 }
 
 function iterator(s) {
-  let buffer = PersistentHashMap.keys(s);
-  let len = buffer.length;
-  let i = {
-    contents: 0
-  };
+  let inner = PersistentHashMap.iterator(s);
   let next = () => {
-    if (i.contents >= len) {
+    let step = inner.next();
+    if (step.done) {
       return {
         value: undefined,
         done: true
       };
     }
-    let x = buffer[i.contents];
-    i.contents = i.contents + 1 | 0;
-    return {
-      value: Primitive_option.some(x),
-      done: false
-    };
+    let match = step.value;
+    if (match !== undefined) {
+      return {
+        value: Primitive_option.some(match[0]),
+        done: false
+      };
+    } else {
+      return {
+        value: undefined,
+        done: true
+      };
+    }
   };
   return {
     next: next
@@ -106,9 +111,59 @@ function withTransient(s, f) {
   return PersistentHashMap.persistent(f(PersistentHashMap.asTransient(s)));
 }
 
+function isSubsetOf(a, b) {
+  if (PersistentHashMap.size(a) > PersistentHashMap.size(b)) {
+    return false;
+  }
+  let isSubset = {
+    contents: true
+  };
+  PersistentHashMap.forEach(a, (k, param) => {
+    if (isSubset.contents && !PersistentHashMap.has(b, k)) {
+      isSubset.contents = false;
+      return;
+    }
+  });
+  return isSubset.contents;
+}
+
+function equals(a, b) {
+  if (PersistentHashMap.size(a) === PersistentHashMap.size(b)) {
+    return isSubsetOf(a, b);
+  } else {
+    return false;
+  }
+}
+
+function isSupersetOf(a, b) {
+  return isSubsetOf(b, a);
+}
+
+function filter(s, f) {
+  return PersistentHashMap.withTransient(PersistentHashMap.make(), t => {
+    PersistentHashMap.forEach(s, (k, param) => {
+      if (f(k)) {
+        PersistentHashMap.setMut(t, k, undefined);
+        return;
+      }
+    });
+    return t;
+  });
+}
+
+function map(s, f) {
+  return PersistentHashMap.withTransient(PersistentHashMap.make(), t => {
+    PersistentHashMap.forEach(s, (k, param) => {
+      PersistentHashMap.setMut(t, f(k), undefined);
+    });
+    return t;
+  });
+}
+
 export {
   make,
   size,
+  isEmpty,
   has,
   add,
   remove,
@@ -126,5 +181,10 @@ export {
   hasMut,
   persistent,
   withTransient,
+  equals,
+  isSubsetOf,
+  isSupersetOf,
+  filter,
+  map,
 }
 /* PersistentHashMap Not a pure module */
