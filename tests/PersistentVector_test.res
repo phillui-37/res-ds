@@ -206,3 +206,42 @@ describe("PersistentVector — transients", () => {
     expect(V.isEmpty(V.fromArray([1])))->toBe(false)
   })
 })
+
+describe("PersistentVector — slice/concat", () => {
+  test("slice returns sub-range", () => {
+    let v = V.fromArray([0, 1, 2, 3, 4])
+    expect(V.toArray(V.slice(v, 1, 4)))->toEqual([1, 2, 3])
+  })
+
+  test("slice with clamped bounds returns empty", () => {
+    let v = V.fromArray([0, 1, 2])
+    expect(V.size(V.slice(v, 5, 10)))->toBe(0)
+    expect(V.size(V.slice(v, 2, 1)))->toBe(0)
+  })
+
+  test("slice full range equals original", () => {
+    let arr = Array.fromInitializer(~length=100, i => i)
+    let v = V.fromArray(arr)
+    expect(V.toArray(V.slice(v, 0, 100)))->toEqual(arr)
+  })
+
+  test("concat two vectors", () => {
+    let a = V.fromArray([1, 2, 3])
+    let b = V.fromArray([4, 5, 6])
+    expect(V.toArray(V.concat(a, b)))->toEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  test("concat with empty is identity", () => {
+    let v = V.fromArray([1, 2, 3])
+    expect(V.toArray(V.concat(v, V.make())))->toEqual([1, 2, 3])
+    expect(V.toArray(V.concat(V.make(), v)))->toEqual([1, 2, 3])
+  })
+
+  test("concat large vectors (crosses trie boundaries)", () => {
+    let a = V.fromArray(Array.fromInitializer(~length=500, i => i))
+    let b = V.fromArray(Array.fromInitializer(~length=500, i => 500 + i))
+    let c = V.concat(a, b)
+    expect(V.size(c))->toBe(1000)
+    expect(V.getExn(c, 999))->toBe(999)
+  })
+})

@@ -81,6 +81,15 @@ let firstExn: t<'a> => 'a
 /** O(1). Last element. Throws `Not_found` if empty. */
 let lastExn: t<'a> => 'a
 
+/** Returns a new vector containing elements in `[start, end_)`.
+    Indices are clamped to `[0, size]`; an empty vector is returned when
+    `start >= end_`. */
+let slice: (t<'a>, int, int) => t<'a>
+
+/** Returns a new vector with all elements of `b` appended to `a`.
+    Uses a transient builder — O(|b| log32 N) amortised. */
+let concat: (t<'a>, t<'a>) => t<'a>
+
 // ───────────────────────── transient (mutable) builder ─────────────────────────
 
 /** Opaque transient (in-place mutable) vector. Use only between {!asTransient}

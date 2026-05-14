@@ -557,3 +557,28 @@ let lastExn = (v: t<'a>): 'a => getExn(v, v.size - 1)
 
 let withTransient = (v: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
   v->asTransient->f->persistent
+
+let slice = (v: t<'a>, start: int, end_: int): t<'a> => {
+  let s = Math.Int.max(0, start)
+  let e = Math.Int.min(v.size, end_)
+  if s >= e {
+    make()
+  } else {
+    withTransient(make(), t => {
+      let i = ref(s)
+      while i.contents < e {
+        let _ = pushMut(t, getExn(v, i.contents))
+        i := i.contents + 1
+      }
+      t
+    })
+  }
+}
+
+let concat = (a: t<'a>, b: t<'a>): t<'a> =>
+  withTransient(a, t => {
+    forEach(b, x => {
+      let _ = pushMut(t, x)
+    })
+    t
+  })
