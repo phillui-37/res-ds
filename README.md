@@ -273,11 +273,11 @@ module H = ResDs.Hash
 Subpath imports are also exported for JS consumers:
 
 ```js
-import * as Vector  from "res-ds/Vector"
-import * as HashMap from "res-ds/HashMap"
-import * as HashSet from "res-ds/HashSet"
-import * as Queue   from "res-ds/Queue"
-import * as Hash    from "res-ds/Hash"
+import * as Vector          from "res-ds/Vector"
+import * as HashMap         from "res-ds/HashMap"
+import * as HashSet         from "res-ds/HashSet"
+import * as PersistentQueue from "res-ds/PersistentQueue"
+import * as Hash            from "res-ds/Hash"
 ```
 
 ### Usage
