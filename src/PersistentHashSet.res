@@ -87,26 +87,22 @@ let withTransient = (s: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
 
 // ───────────────────────── comparison and filtering ─────────────────────────
 
-let equals = (a: t<'a>, b: t<'a>): bool =>
-  M.size(a) == M.size(b) && {
-    let allIn = ref(true)
+exception FoundNonMember
+
+let isSubsetOf = (a: t<'a>, b: t<'a>): bool =>
+  try {
     forEach(a, x =>
       if !has(b, x) {
-        allIn := false
+        raise(FoundNonMember)
       }
     )
-    allIn.contents
+    true
+  } catch {
+  | FoundNonMember => false
   }
 
-let isSubsetOf = (a: t<'a>, b: t<'a>): bool => {
-  let allIn = ref(true)
-  forEach(a, x =>
-    if !has(b, x) {
-      allIn := false
-    }
-  )
-  allIn.contents
-}
+let equals = (a: t<'a>, b: t<'a>): bool =>
+  M.size(a) == M.size(b) && isSubsetOf(a, b)
 
 let isSupersetOf = (a: t<'a>, b: t<'a>): bool => isSubsetOf(b, a)
 

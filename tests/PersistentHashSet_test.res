@@ -82,6 +82,7 @@ describe("PersistentHashSet — equals/subset/superset/filter/map", () => {
     let a = S.fromArray([1, 2, 3])
     let b = S.fromArray([1, 2, 4])
     expect(S.equals(a, b))->toBe(false)
+    expect(S.equals(S.fromArray([1, 2]), S.fromArray([1, 2, 3])))->toBe(false)
   })
 
   test("isSubsetOf", () => {
@@ -114,5 +115,16 @@ describe("PersistentHashSet — equals/subset/superset/filter/map", () => {
     expect(S.has(doubled, 4))->toBe(true)
     expect(S.has(doubled, 6))->toBe(true)
     expect(S.size(doubled))->toBe(3)
+  })
+
+  test("empty set edge cases", () => {
+    let empty = S.make()
+    let nonEmpty = S.fromArray([1, 2, 3])
+    expect(S.equals(empty, empty))->toBe(true)
+    expect(S.isSubsetOf(empty, nonEmpty))->toBe(true)
+    expect(S.isSubsetOf(empty, empty))->toBe(true)
+    expect(S.isSupersetOf(nonEmpty, empty))->toBe(true)
+    expect(S.size(S.filter(empty, _ => true)))->toBe(0)
+    expect(S.size(S.map(empty, x => x)))->toBe(0)
   })
 })
