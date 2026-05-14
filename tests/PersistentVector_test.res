@@ -181,4 +181,9 @@ describe("PersistentVector — transients", () => {
     // first leaf block. With short-circuit it calls eq exactly once.
     expect(calls.contents)->toBe(1)
   })
+
+  test("isEmpty returns true for empty vector", () => {
+    expect(V.isEmpty(V.make()))->toBe(true)
+    expect(V.isEmpty(V.fromArray([1])))->toBe(false)
+  })
 })

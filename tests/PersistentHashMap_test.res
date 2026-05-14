@@ -240,4 +240,9 @@ describe("PersistentHashMap — lazy iterator", () => {
     }
     expect(count.contents)->toBe(3)
   })
+
+  test("isEmpty returns true for empty map", () => {
+    expect(M.isEmpty(M.make()))->toBe(true)
+    expect(M.isEmpty(M.set(M.make(), "a", 1)))->toBe(false)
+  })
 })

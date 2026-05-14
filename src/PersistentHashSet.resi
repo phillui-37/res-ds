@@ -11,6 +11,9 @@ let make: unit => t<'a>
 /** Number of elements. */
 let size: t<'a> => int
 
+/** True iff the set contains no elements. */
+let isEmpty: t<'a> => bool
+
 /** True iff `x` is in the set. */
 let has: (t<'a>, 'a) => bool
 

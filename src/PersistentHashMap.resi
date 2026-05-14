@@ -13,6 +13,9 @@ let make: unit => t<'k, 'v>
 /** Number of entries. */
 let size: t<'k, 'v> => int
 
+/** True iff the map contains no entries. */
+let isEmpty: t<'k, 'v> => bool
+
 /** O(log32 N) lookup. */
 let get: (t<'k, 'v>, 'k) => option<'v>
 

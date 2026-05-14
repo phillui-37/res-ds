@@ -48,6 +48,7 @@ let make = (): t<'a> => {
 
 let size = (v: t<'a>): int => v.size
 let length = size
+let isEmpty = (v: t<'a>): bool => v.size == 0
 
 // Number of elements that live in the trie (everything not in the tail).
 let tailOffset = (v: t<'a>): int =>

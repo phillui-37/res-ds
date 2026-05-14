@@ -9,6 +9,7 @@ type t<'a> = M.t<'a, unit>
 let make = (): t<'a> => M.make()
 
 let size = (s: t<'a>): int => M.size(s)
+let isEmpty = (s: t<'a>): bool => M.isEmpty(s)
 let has = (s: t<'a>, x: 'a): bool => M.has(s, x)
 let add = (s: t<'a>, x: 'a): t<'a> => M.set(s, x, ())
 let remove = (s: t<'a>, x: 'a): t<'a> => M.remove(s, x)

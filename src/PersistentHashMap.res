@@ -49,6 +49,7 @@ let make = (): t<'k, 'v> => {
 }
 
 let size = (m: t<'k, 'v>): int => m.size
+let isEmpty = (m: t<'k, 'v>): bool => m.size == 0
 
 // ───────────────────────── lookup ─────────────────────────
 

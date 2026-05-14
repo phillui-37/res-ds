@@ -15,6 +15,9 @@ let size: t<'a> => int
 /** Alias for {!size}. */
 let length: t<'a> => int
 
+/** True iff the vector contains no elements. */
+let isEmpty: t<'a> => bool
+
 /** O(log32 N) lookup. Returns `None` when `i` is out of bounds. */
 let get: (t<'a>, int) => option<'a>
 

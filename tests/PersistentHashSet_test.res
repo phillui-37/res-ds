@@ -64,4 +64,9 @@ describe("PersistentHashSet — basics", () => {
     }
     expect(count.contents)->toBe(5)
   })
+
+  test("isEmpty returns true for empty set", () => {
+    expect(S.isEmpty(S.make()))->toBe(true)
+    expect(S.isEmpty(S.add(S.make(), 1)))->toBe(false)
+  })
 })
