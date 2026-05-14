@@ -192,7 +192,7 @@ let rec doSet = (level: int, n: node<'a>, i: int, x: 'a): node<'a> => {
 
 let set = (v: t<'a>, i: int, x: 'a): t<'a> =>
   if i < 0 || i > v.size {
-    throw(Not_found)
+    throw(Invalid_argument("PersistentVector.set: index out of bounds"))
   } else if i == v.size {
     push(v, x)
   } else if i >= tailOffset(v) {
@@ -236,7 +236,7 @@ let rec popTail = (level: int, n: node<'a>, size: int): option<node<'a>> => {
 
 let pop = (v: t<'a>): t<'a> =>
   switch v.size {
-  | 0 => throw(Not_found)
+  | 0 => throw(Invalid_argument("PersistentVector.pop: empty vector"))
   | 1 => make()
   | _ =>
     if v.size - tailOffset(v) > 1 {
@@ -488,7 +488,7 @@ let pushMut = (t: transient<'a>, x: 'a): transient<'a> => {
 let setMut = (t: transient<'a>, i: int, x: 'a): transient<'a> => {
   ensureEditable(t)
   if i < 0 || i > t.size {
-    throw(Not_found)
+    throw(Invalid_argument("PersistentVector.setMut: index out of bounds"))
   } else if i == t.size {
     pushMut(t, x)
   } else {

@@ -11,5 +11,6 @@ type expect<'a>
 @send external toBeTruthy: expect<'a> => unit = "toBeTruthy"
 @send external toBeFalsy: expect<'a> => unit = "toBeFalsy"
 @send external toThrow: expect<unit => 'a> => unit = "toThrow"
+@send external toThrowError: (expect<unit => 'a>, string) => unit = "toThrowError"
 
 @get external not_: expect<'a> => expect<'a> = "not"

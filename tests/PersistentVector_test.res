@@ -36,6 +36,41 @@ describe("PersistentVector — basics", () => {
     expect(V.toArray(w))->toEqual([1, 2])
   })
 
+  test("pop on empty vector throws Invalid_argument", () => {
+    let msg = ref("")
+    try { let _ = V.pop(V.make()); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.pop: empty vector")
+  })
+
+  test("set with negative index throws Invalid_argument", () => {
+    let v = V.fromArray([1, 2, 3])
+    let msg = ref("")
+    try { let _ = V.set(v, -1, 0); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.set: index out of bounds")
+  })
+
+  test("set with index > size throws Invalid_argument", () => {
+    let v = V.fromArray([1, 2, 3])
+    let msg = ref("")
+    try { let _ = V.set(v, 4, 0); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.set: index out of bounds")
+  })
+
+  test("setMut with out-of-bounds index throws Invalid_argument", () => {
+    let t = V.asTransient(V.fromArray([1, 2, 3]))
+    let msg = ref("")
+    try { let _ = V.setMut(t, -1, 0); () } catch {
+    | Invalid_argument(m) => msg := m
+    }
+    expect(msg.contents)->toBe("PersistentVector.setMut: index out of bounds")
+  })
+
   test("toArray round-trip on a 1000-element vector (crosses tail boundary)", () => {
     let n = 1000
     let arr = Array.fromInitializer(~length=n, i => i)
