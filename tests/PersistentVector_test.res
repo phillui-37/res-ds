@@ -167,4 +167,18 @@ describe("PersistentVector — transients", () => {
     let _ = V.persistent(t)
     expect(() => V.pushMut(t, 4)->ignore)->toThrow
   })
+
+  test("equals short-circuits: comparator not called after first mismatch", () => {
+    let calls = ref(0)
+    let eq = (a, b) => {
+      calls := calls.contents + 1
+      a == b
+    }
+    let a = V.fromArray(Array.fromInitializer(~length=64, i => i))
+    let b = V.set(a, 0, -1) // differ at index 0
+    let _ = V.equals(a, b, eq)
+    // Without short-circuit the inner for-loop calls eq 32 times for the
+    // first leaf block. With short-circuit it calls eq exactly once.
+    expect(calls.contents)->toBe(1)
+  })
 })

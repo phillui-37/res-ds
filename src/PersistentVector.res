@@ -350,10 +350,12 @@ let equals = (a: t<'a>, b: t<'a>, eq: ('a, 'a) => bool): bool =>
       let bv = arrayFor(b, i.contents)
       let baseIdx = i.contents - B.land(i.contents, mask5)
       let copyLen = Math.Int.min(branching, a.size - baseIdx)
-      for j in 0 to copyLen - 1 {
-        if !eq(Array.getUnsafe(av, j), Array.getUnsafe(bv, j)) {
+      let j = ref(0)
+      while same.contents && j.contents < copyLen {
+        if !eq(Array.getUnsafe(av, j.contents), Array.getUnsafe(bv, j.contents)) {
           same := false
         }
+        j := j.contents + 1
       }
       i := baseIdx + copyLen
     }
