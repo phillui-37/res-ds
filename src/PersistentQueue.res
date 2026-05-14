@@ -54,19 +54,8 @@ let dequeueExn = (q: t<'a>): ('a, t<'a>) =>
   | None => throw(Not_found)
   }
 
-let toArray = (q: t<'a>): array<'a> => {
-  let out = []
-  let cur = ref(q)
-  while !isEmpty(cur.contents) {
-    switch dequeue(cur.contents) {
-    | Some((x, q2)) =>
-      let _ = Array.push(out, x)
-      cur := q2
-    | None => ()
-    }
-  }
-  out
-}
+let toArray = (q: t<'a>): array<'a> =>
+  Array.concat(List.toArray(q.front), List.toArray(List.reverse(q.rear)))
 
 let fromArray = (arr: array<'a>): t<'a> => {
   let q = ref(make())
@@ -103,13 +92,20 @@ type iterStep<'a> = {value: option<'a>, done: bool}
 type iter<'a> = {next: unit => iterStep<'a>}
 
 let iterator = (q: t<'a>): iter<'a> => {
-  let cur = ref(q)
+  let front = ref(q.front)
+  let rear = ref(List.reverse(q.rear))
   let next = () =>
-    switch dequeue(cur.contents) {
-    | Some((x, q2)) =>
-      cur := q2
+    switch front.contents {
+    | list{x, ...rest} =>
+      front := rest
       {value: Some(x), done: false}
-    | None => {value: None, done: true}
+    | list{} =>
+      switch rear.contents {
+      | list{x, ...rest} =>
+        rear := rest
+        {value: Some(x), done: false}
+      | list{} => {value: None, done: true}
+      }
     }
   {next: next}
 }

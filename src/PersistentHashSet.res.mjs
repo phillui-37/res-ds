@@ -2,7 +2,6 @@
 
 import * as Primitive_option from "@rescript/runtime/lib/es6/Primitive_option.js";
 import * as PersistentHashMap from "./PersistentHashMap.res.mjs";
-import * as Primitive_exceptions from "@rescript/runtime/lib/es6/Primitive_exceptions.js";
 
 function make() {
   return PersistentHashMap.make();
@@ -112,27 +111,20 @@ function withTransient(s, f) {
   return PersistentHashMap.persistent(f(PersistentHashMap.asTransient(s)));
 }
 
-let FoundNonMember = /* @__PURE__ */Primitive_exceptions.create("PersistentHashSet.FoundNonMember");
-
 function isSubsetOf(a, b) {
-  try {
-    PersistentHashMap.forEach(a, (k, param) => {
-      if (PersistentHashMap.has(b, k)) {
-        return;
-      }
-      throw {
-        RE_EXN_ID: FoundNonMember,
-        Error: new Error()
-      };
-    });
-    return true;
-  } catch (raw_exn) {
-    let exn = Primitive_exceptions.internalToException(raw_exn);
-    if (exn.RE_EXN_ID === FoundNonMember) {
-      return false;
-    }
-    throw exn;
+  if (PersistentHashMap.size(a) > PersistentHashMap.size(b)) {
+    return false;
   }
+  let isSubset = {
+    contents: true
+  };
+  PersistentHashMap.forEach(a, (k, param) => {
+    if (isSubset.contents && !PersistentHashMap.has(b, k)) {
+      isSubset.contents = false;
+      return;
+    }
+  });
+  return isSubset.contents;
 }
 
 function equals(a, b) {
