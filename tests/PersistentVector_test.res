@@ -245,3 +245,31 @@ describe("PersistentVector — slice/concat", () => {
     expect(V.getExn(c, 999))->toBe(999)
   })
 })
+
+describe("PersistentVector — search/predicate", () => {
+  test("find returns first matching element", () => {
+    let v = V.fromArray([1, 2, 3, 4, 5])
+    expect(V.find(v, x => x > 3))->toEqual(Some(4))
+    expect(V.find(v, x => x > 10))->toEqual(None)
+  })
+
+  test("findIndex returns index of first match", () => {
+    let v = V.fromArray([10, 20, 30, 20])
+    expect(V.findIndex(v, x => x == 20))->toEqual(Some(1))
+    expect(V.findIndex(v, x => x == 99))->toEqual(None)
+  })
+
+  test("some returns true iff any element satisfies predicate", () => {
+    let v = V.fromArray([1, 2, 3])
+    expect(V.some(v, x => x > 2))->toBe(true)
+    expect(V.some(v, x => x > 10))->toBe(false)
+    expect(V.some(V.make(), _ => true))->toBe(false)
+  })
+
+  test("every returns true iff all elements satisfy predicate", () => {
+    let v = V.fromArray([2, 4, 6])
+    expect(V.every(v, x => Int.mod(x, 2) == 0))->toBe(true)
+    expect(V.every(v, x => x > 3))->toBe(false)
+    expect(V.every(V.make(), _ => false))->toBe(true)
+  })
+})

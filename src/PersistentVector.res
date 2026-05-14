@@ -582,3 +582,43 @@ let concat = (a: t<'a>, b: t<'a>): t<'a> =>
     })
     t
   })
+
+let find = (v: t<'a>, f: 'a => bool): option<'a> => {
+  let result = ref(None)
+  let i = ref(0)
+  while result.contents == None && i.contents < v.size {
+    let x = getExn(v, i.contents)
+    if f(x) {
+      result := Some(x)
+    }
+    i := i.contents + 1
+  }
+  result.contents
+}
+
+let findIndex = (v: t<'a>, f: 'a => bool): option<int> => {
+  let result = ref(None)
+  let i = ref(0)
+  while result.contents == None && i.contents < v.size {
+    if f(getExn(v, i.contents)) {
+      result := Some(i.contents)
+    }
+    i := i.contents + 1
+  }
+  result.contents
+}
+
+let some = (v: t<'a>, f: 'a => bool): bool =>
+  findIndex(v, f) != None
+
+let every = (v: t<'a>, f: 'a => bool): bool => {
+  let failed = ref(false)
+  let i = ref(0)
+  while !failed.contents && i.contents < v.size {
+    if !f(getExn(v, i.contents)) {
+      failed := true
+    }
+    i := i.contents + 1
+  }
+  !failed.contents
+}

@@ -90,6 +90,18 @@ let slice: (t<'a>, int, int) => t<'a>
     Uses a transient builder — O(|b| log32 N) amortised. */
 let concat: (t<'a>, t<'a>) => t<'a>
 
+/** Returns the first element satisfying `f`, or `None`. */
+let find: (t<'a>, 'a => bool) => option<'a>
+
+/** Returns the index of the first element satisfying `f`, or `None`. */
+let findIndex: (t<'a>, 'a => bool) => option<int>
+
+/** True iff any element satisfies `f`. Always `false` on empty vector. */
+let some: (t<'a>, 'a => bool) => bool
+
+/** True iff every element satisfies `f`. Always `true` on empty vector (vacuous). */
+let every: (t<'a>, 'a => bool) => bool
+
 // ───────────────────────── transient (mutable) builder ─────────────────────────
 
 /** Opaque transient (in-place mutable) vector. Use only between {!asTransient}
