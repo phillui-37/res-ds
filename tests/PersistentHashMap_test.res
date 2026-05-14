@@ -208,3 +208,36 @@ describe("PersistentHashMap — transients", () => {
     expect(() => M.setMut(t, "b", 2)->ignore)->toThrow
   })
 })
+
+describe("PersistentHashMap — lazy iterator", () => {
+  test("iterator yields exactly size elements", () => {
+    let n = 1000
+    let m = ref(M.make())
+    for i in 0 to n - 1 {
+      m := M.set(m.contents, i, i * 2)
+    }
+    let it = M.iterator(m.contents)
+    let count = ref(0)
+    let step = ref(it.next())
+    while !step.contents.done {
+      count := count.contents + 1
+      step := it.next()
+    }
+    expect(count.contents)->toBe(n)
+  })
+
+  test("iterator terminates correctly with null/undefined keys", () => {
+    let m = M.make()
+      ->M.set(Obj.magic(Null.null), 0)
+      ->M.set(Obj.magic(Js.undefined), 1)
+      ->M.set("a", 2)
+    let it = M.iterator(m)
+    let count = ref(0)
+    let step = ref(it.next())
+    while !step.contents.done {
+      count := count.contents + 1
+      step := it.next()
+    }
+    expect(count.contents)->toBe(3)
+  })
+})

@@ -470,18 +470,59 @@ type iterStep<'a> = {value: option<'a>, done: bool}
 type iter<'a> = {next: unit => iterStep<'a>}
 
 let iterator = (m: t<'k, 'v>): iter<('k, 'v)> => {
-  let buffer = entries(m)
-  let len = Array.length(buffer)
-  let i = ref(0)
-  let next = () =>
-    if i.contents >= len {
-      {value: None, done: true}
-    } else {
-      let pair = Array.getUnsafe(buffer, i.contents)
-      i := i.contents + 1
-      {value: Some(pair), done: false}
+  let nullDone = ref(false)
+  let undefDone = ref(false)
+  let stack: array<array<entry<'k, 'v>>> = []
+  let stackIdxs: array<int> = []
+  // Seed trie lazily at construction time (O(1) — just push the root array).
+  (switch m.root {
+  | BitmapIndexed({array}) | HashCollision({array}) =>
+    if Array.length(array) > 0 {
+      Array.push(stack, array)
+      Array.push(stackIdxs, 0)
     }
-  {next: next}
+  })
+  let rec advance = (): iterStep<('k, 'v)> => {
+    if !nullDone.contents {
+      nullDone := true
+      switch m.nullEntry {
+      | Some(pair) => {value: Some(pair), done: false}
+      | None => advance()
+      }
+    } else if !undefDone.contents {
+      undefDone := true
+      switch m.undefinedEntry {
+      | Some(pair) => {value: Some(pair), done: false}
+      | None => advance()
+      }
+    } else {
+      let depth = Array.length(stack)
+      if depth == 0 {
+        {value: None, done: true}
+      } else {
+        let arr = Array.getUnsafe(stack, depth - 1)
+        let idx = Array.getUnsafe(stackIdxs, depth - 1)
+        if idx >= Array.length(arr) {
+          let _ = Array.pop(stack)
+          let _ = Array.pop(stackIdxs)
+          advance()
+        } else {
+          Array.setUnsafe(stackIdxs, depth - 1, idx + 1)
+          switch Array.getUnsafe(arr, idx) {
+          | KV(k, v) => {value: Some((k, v)), done: false}
+          | Sub(child) =>
+            (switch child {
+            | BitmapIndexed({array}) | HashCollision({array}) =>
+              Array.push(stack, array)
+              Array.push(stackIdxs, 0)
+            })
+            advance()
+          }
+        }
+      }
+    }
+  }
+  {next: advance}
 }
 
 // ───────────────────────── transient (in-place mutable) ─────────────────────────

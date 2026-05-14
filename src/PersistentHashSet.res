@@ -53,17 +53,18 @@ type iterStep<'a> = {value: option<'a>, done: bool}
 type iter<'a> = {next: unit => iterStep<'a>}
 
 let iterator = (s: t<'a>): iter<'a> => {
-  let buffer = toArray(s)
-  let len = Array.length(buffer)
-  let i = ref(0)
-  let next = () =>
-    if i.contents >= len {
+  let inner = M.iterator(s)
+  let next = () => {
+    let step = inner.next()
+    if step.done {
       {value: None, done: true}
     } else {
-      let x = Array.getUnsafe(buffer, i.contents)
-      i := i.contents + 1
-      {value: Some(x), done: false}
+      switch step.value {
+      | Some((k, _)) => {value: Some(k), done: false}
+      | None => {value: None, done: true}
+      }
     }
+  }
   {next: next}
 }
 
