@@ -55,14 +55,12 @@ let dequeueExn = (q: t<'a>): ('a, t<'a>) =>
   }
 
 let toArray = (q: t<'a>): array<'a> => {
-  let out = Array.make(~length=q.size, Obj.magic(0))
-  let i = ref(0)
+  let out = []
   let cur = ref(q)
   while !isEmpty(cur.contents) {
     switch dequeue(cur.contents) {
     | Some((x, q2)) =>
-      Array.setUnsafe(out, i.contents, x)
-      i := i.contents + 1
+      let _ = Array.push(out, x)
       cur := q2
     | None => ()
     }
