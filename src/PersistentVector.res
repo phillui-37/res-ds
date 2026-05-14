@@ -567,8 +567,16 @@ let slice = (v: t<'a>, start: int, end_: int): t<'a> => {
     withTransient(make(), t => {
       let i = ref(s)
       while i.contents < e {
-        let _ = pushMut(t, getExn(v, i.contents))
-        i := i.contents + 1
+        let block = arrayFor(v, i.contents)
+        let baseIdx = i.contents - B.land(i.contents, mask5)
+        let blockEnd = Math.Int.min(e, baseIdx + branching)
+        let j = ref(i.contents - baseIdx)
+        let jEnd = blockEnd - baseIdx
+        while j.contents < jEnd {
+          let _ = pushMut(t, Array.getUnsafe(block, j.contents))
+          j := j.contents + 1
+        }
+        i := blockEnd
       }
       t
     })
@@ -587,11 +595,17 @@ let find = (v: t<'a>, f: 'a => bool): option<'a> => {
   let result = ref(None)
   let i = ref(0)
   while result.contents == None && i.contents < v.size {
-    let x = getExn(v, i.contents)
-    if f(x) {
-      result := Some(x)
+    let block = arrayFor(v, i.contents)
+    let copyLen = Math.Int.min(branching, v.size - i.contents)
+    let j = ref(0)
+    while result.contents == None && j.contents < copyLen {
+      let x = Array.getUnsafe(block, j.contents)
+      if f(x) {
+        result := Some(x)
+      }
+      j := j.contents + 1
     }
-    i := i.contents + 1
+    i := i.contents + copyLen
   }
   result.contents
 }
@@ -600,10 +614,16 @@ let findIndex = (v: t<'a>, f: 'a => bool): option<int> => {
   let result = ref(None)
   let i = ref(0)
   while result.contents == None && i.contents < v.size {
-    if f(getExn(v, i.contents)) {
-      result := Some(i.contents)
+    let block = arrayFor(v, i.contents)
+    let copyLen = Math.Int.min(branching, v.size - i.contents)
+    let j = ref(0)
+    while result.contents == None && j.contents < copyLen {
+      if f(Array.getUnsafe(block, j.contents)) {
+        result := Some(i.contents + j.contents)
+      }
+      j := j.contents + 1
     }
-    i := i.contents + 1
+    i := i.contents + copyLen
   }
   result.contents
 }
@@ -615,10 +635,16 @@ let every = (v: t<'a>, f: 'a => bool): bool => {
   let failed = ref(false)
   let i = ref(0)
   while !failed.contents && i.contents < v.size {
-    if !f(getExn(v, i.contents)) {
-      failed := true
+    let block = arrayFor(v, i.contents)
+    let copyLen = Math.Int.min(branching, v.size - i.contents)
+    let j = ref(0)
+    while !failed.contents && j.contents < copyLen {
+      if !f(Array.getUnsafe(block, j.contents)) {
+        failed := true
+      }
+      j := j.contents + 1
     }
-    i := i.contents + 1
+    i := i.contents + copyLen
   }
   !failed.contents
 }

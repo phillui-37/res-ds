@@ -44,6 +44,14 @@ describe("PersistentVector — basics", () => {
       2,
       3
     ]);
+    let v3 = PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let w3 = PersistentVector.set(v3, 3, 42);
+    expect(PersistentVector.size(w3)).toBe(4);
+    expect(PersistentVector.getExn(w3, 3)).toBe(42);
   });
   test("pop removes the last element", () => {
     let v = PersistentVector.fromArray([

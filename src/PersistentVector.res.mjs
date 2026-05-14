@@ -790,8 +790,16 @@ function slice(v, start, end_) {
   let t = asTransient(v$1);
   let i = s;
   while (i < e) {
-    pushMut(t, getExn(v, i));
-    i = i + 1 | 0;
+    let block = arrayFor(v, i);
+    let baseIdx = i - (i & 31) | 0;
+    let blockEnd = Math.min(e, baseIdx + 32 | 0);
+    let j = i - baseIdx | 0;
+    let jEnd = blockEnd - baseIdx | 0;
+    while (j < jEnd) {
+      pushMut(t, block[j]);
+      j = j + 1 | 0;
+    };
+    i = blockEnd;
   };
   return persistent(t);
 }
@@ -807,11 +815,17 @@ function find(v, f) {
   let result;
   let i = 0;
   while (result === undefined && i < v.size) {
-    let x = getExn(v, i);
-    if (f(x)) {
-      result = Primitive_option.some(x);
-    }
-    i = i + 1 | 0;
+    let block = arrayFor(v, i);
+    let copyLen = Math.min(32, v.size - i | 0);
+    let j = 0;
+    while (result === undefined && j < copyLen) {
+      let x = block[j];
+      if (f(x)) {
+        result = Primitive_option.some(x);
+      }
+      j = j + 1 | 0;
+    };
+    i = i + copyLen | 0;
   };
   return result;
 }
@@ -820,10 +834,16 @@ function findIndex(v, f) {
   let result;
   let i = 0;
   while (result === undefined && i < v.size) {
-    if (f(getExn(v, i))) {
-      result = i;
-    }
-    i = i + 1 | 0;
+    let block = arrayFor(v, i);
+    let copyLen = Math.min(32, v.size - i | 0);
+    let j = 0;
+    while (result === undefined && j < copyLen) {
+      if (f(block[j])) {
+        result = i + j | 0;
+      }
+      j = j + 1 | 0;
+    };
+    i = i + copyLen | 0;
   };
   return result;
 }
@@ -836,10 +856,16 @@ function every(v, f) {
   let failed = false;
   let i = 0;
   while (!failed && i < v.size) {
-    if (!f(getExn(v, i))) {
-      failed = true;
-    }
-    i = i + 1 | 0;
+    let block = arrayFor(v, i);
+    let copyLen = Math.min(32, v.size - i | 0);
+    let j = 0;
+    while (!failed && j < copyLen) {
+      if (!f(block[j])) {
+        failed = true;
+      }
+      j = j + 1 | 0;
+    };
+    i = i + copyLen | 0;
   };
   return !failed;
 }

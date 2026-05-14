@@ -3,6 +3,7 @@
 import * as Hash from "./Hash.res.mjs";
 import * as Core__Array from "@rescript/core/src/Core__Array.res.mjs";
 import * as Core__Option from "@rescript/core/src/Core__Option.res.mjs";
+import * as Primitive_object from "@rescript/runtime/lib/es6/Primitive_object.js";
 import * as Primitive_option from "@rescript/runtime/lib/es6/Primitive_option.js";
 
 let noEdit = {
@@ -325,38 +326,70 @@ function nodeAssoc(_n, shift, hash, key, value, addedLeaf) {
 
 function set(m, key, value) {
   if (key === null) {
-    let added = Core__Option.isNone(m.nullEntry) ? 1 : 0;
-    return {
-      size: m.size + added | 0,
-      root: m.root,
-      nullEntry: [
-        key,
-        value
-      ],
-      undefinedEntry: m.undefinedEntry
-    };
+    let match = m.nullEntry;
+    if (match !== undefined) {
+      if (Primitive_object.equal(match[1], value)) {
+        return m;
+      } else {
+        return {
+          size: m.size,
+          root: m.root,
+          nullEntry: [
+            key,
+            value
+          ],
+          undefinedEntry: m.undefinedEntry
+        };
+      }
+    } else {
+      return {
+        size: m.size + 1 | 0,
+        root: m.root,
+        nullEntry: [
+          key,
+          value
+        ],
+        undefinedEntry: m.undefinedEntry
+      };
+    }
   }
   if (typeof key === "undefined") {
-    let added$1 = Core__Option.isNone(m.undefinedEntry) ? 1 : 0;
-    return {
-      size: m.size + added$1 | 0,
-      root: m.root,
-      nullEntry: m.nullEntry,
-      undefinedEntry: [
-        key,
-        value
-      ]
-    };
+    let match$1 = m.undefinedEntry;
+    if (match$1 !== undefined) {
+      if (Primitive_object.equal(match$1[1], value)) {
+        return m;
+      } else {
+        return {
+          size: m.size,
+          root: m.root,
+          nullEntry: m.nullEntry,
+          undefinedEntry: [
+            key,
+            value
+          ]
+        };
+      }
+    } else {
+      return {
+        size: m.size + 1 | 0,
+        root: m.root,
+        nullEntry: m.nullEntry,
+        undefinedEntry: [
+          key,
+          value
+        ]
+      };
+    }
   }
-  let added$2 = {
+  let added = {
     contents: false
   };
-  let newRoot = nodeAssoc(m.root, 0, Hash.hash(key), key, value, added$2);
-  if (newRoot === m.root && !added$2.contents) {
+  let newRoot = nodeAssoc(m.root, 0, Hash.hash(key), key, value, added);
+  if (newRoot === m.root && !added.contents) {
     return m;
   } else {
     return {
-      size: added$2.contents ? m.size + 1 | 0 : m.size,
+      size: added.contents ? m.size + 1 | 0 : m.size,
       root: newRoot,
       nullEntry: m.nullEntry,
       undefinedEntry: m.undefinedEntry
@@ -585,6 +618,10 @@ function fromEntries(entries) {
   return m.contents;
 }
 
+function nodeArray(node) {
+  return node.array;
+}
+
 function iterator(m) {
   let nullDone = {
     contents: false
@@ -594,23 +631,10 @@ function iterator(m) {
   };
   let stack = [];
   let stackIdxs = [];
-  let match = m.root;
-  let exit = 0;
-  let array;
-  if (match.TAG === "BitmapIndexed") {
-    let array$1 = match.array;
-    array = array$1;
-    exit = 1;
-  } else {
-    let array$2 = match.array;
-    array = array$2;
-    exit = 1;
-  }
-  if (exit === 1) {
-    if (array.length > 0) {
-      stack.push(array);
-      stackIdxs.push(0);
-    }
+  let rootArr = nodeArray(m.root);
+  if (rootArr.length > 0) {
+    stack.push(rootArr);
+    stackIdxs.push(0);
   }
   let advance = () => {
     while (true) {
@@ -641,22 +665,8 @@ function iterator(m) {
               done: false
             };
           }
-          let child$1 = child._0;
-          let exit = 0;
-          let array;
-          if (child$1.TAG === "BitmapIndexed") {
-            let array$1 = child$1.array;
-            array = array$1;
-            exit = 1;
-          } else {
-            let array$2 = child$1.array;
-            array = array$2;
-            exit = 1;
-          }
-          if (exit === 1) {
-            stack.push(array);
-            stackIdxs.push(0);
-          }
+          stack.push(nodeArray(child._0));
+          stackIdxs.push(0);
           continue;
         }
         undefDone.contents = true;

@@ -476,19 +476,22 @@ let fromEntries = (entries: array<('k, 'v)>): t<'k, 'v> => {
 type iterStep<'a> = {value: option<'a>, done: bool}
 type iter<'a> = {next: unit => iterStep<'a>}
 
+let nodeArray = (node: node<'k, 'v>): array<entry<'k, 'v>> =>
+  switch node {
+  | BitmapIndexed({array}) | HashCollision({array}) => array
+  }
+
 let iterator = (m: t<'k, 'v>): iter<('k, 'v)> => {
   let nullDone = ref(false)
   let undefDone = ref(false)
   let stack: array<array<entry<'k, 'v>>> = []
   let stackIdxs: array<int> = []
   // Seed trie lazily at construction time (O(1) — just push the root array).
-  (switch m.root {
-  | BitmapIndexed({array}) | HashCollision({array}) =>
-    if Array.length(array) > 0 {
-      Array.push(stack, array)
-      Array.push(stackIdxs, 0)
-    }
-  })
+  let rootArr = nodeArray(m.root)
+  if Array.length(rootArr) > 0 {
+    Array.push(stack, rootArr)
+    Array.push(stackIdxs, 0)
+  }
   let rec advance = (): iterStep<('k, 'v)> => {
     if !nullDone.contents {
       nullDone := true
@@ -518,11 +521,8 @@ let iterator = (m: t<'k, 'v>): iter<('k, 'v)> => {
           switch Array.getUnsafe(arr, idx) {
           | KV(k, v) => {value: Some((k, v)), done: false}
           | Sub(child) =>
-            (switch child {
-            | BitmapIndexed({array}) | HashCollision({array}) =>
-              Array.push(stack, array)
-              Array.push(stackIdxs, 0)
-            })
+            Array.push(stack, nodeArray(child))
+            Array.push(stackIdxs, 0)
             advance()
           }
         }

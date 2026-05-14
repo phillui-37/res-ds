@@ -27,6 +27,11 @@ describe("PersistentVector — basics", () => {
     let v = V.fromArray([1, 2])
     let w = V.set(v, 2, 3)
     expect(V.toArray(w))->toEqual([1, 2, 3])
+    // Also verify for size-3 (same base as the "throws" test): size+1 and correct last element.
+    let v3 = V.fromArray([1, 2, 3])
+    let w3 = V.set(v3, 3, 42)
+    expect(V.size(w3))->toBe(4)
+    expect(V.getExn(w3, 3))->toBe(42)
   })
 
   test("pop removes the last element", () => {
