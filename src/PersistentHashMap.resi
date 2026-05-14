@@ -72,7 +72,7 @@ let map: (t<'k, 'v>, 'v => 'w) => t<'k, 'w>
 /** Returns a new map containing only entries for which `f(key, value)` is true. */
 let filter: (t<'k, 'v>, ('k, 'v) => bool) => t<'k, 'v>
 
-/** Atomically read-modify-write a key.
+/** Update a key based on its current optional value.
     `f` receives `Some(v)` if the key exists, `None` if absent.
     Return `Some(newV)` to insert/replace, `None` to delete. */
 let update: (t<'k, 'v>, 'k, option<'v> => option<'v>) => t<'k, 'v>
