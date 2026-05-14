@@ -4,3 +4,4 @@ module Hash = Hash
 module Vector = PersistentVector
 module HashMap = PersistentHashMap
 module HashSet = PersistentHashSet
+module PersistentQueue = PersistentQueue
