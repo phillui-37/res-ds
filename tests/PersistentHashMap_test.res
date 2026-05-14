@@ -284,4 +284,33 @@ describe("PersistentHashMap — map/filter/update", () => {
     expect(M.has(m2, "x"))->toBe(false)
     expect(M.size(m2))->toBe(0)
   })
+
+  test("map with null and undefined keys", () => {
+    let m = M.make()
+      ->M.set("a", 1)
+      ->M.set(Obj.magic(Null.null), 2)
+      ->M.set(Obj.magic(Js.undefined), 3)
+    let m2 = M.map(m, v => v * 10)
+    expect(M.get(m2, "a"))->toEqual(Some(10))
+    expect(M.get(m2, Obj.magic(Null.null)))->toEqual(Some(20))
+    expect(M.get(m2, Obj.magic(Js.undefined)))->toEqual(Some(30))
+  })
+
+  test("filter with null and undefined keys", () => {
+    let m = M.make()
+      ->M.set("a", 1)
+      ->M.set(Obj.magic(Null.null), 2)
+      ->M.set(Obj.magic(Js.undefined), 3)
+    let m2 = M.filter(m, (_, v) => v > 1)
+    expect(M.size(m2))->toBe(2)
+    expect(M.get(m2, "a"))->toEqual(None)
+    expect(M.get(m2, Obj.magic(Null.null)))->toEqual(Some(2))
+    expect(M.get(m2, Obj.magic(Js.undefined)))->toEqual(Some(3))
+  })
+
+  test("update absent key with f returning None is a no-op", () => {
+    let m = M.make()
+    let m2 = M.update(m, "x", _ => None)
+    expect(M.size(m2))->toBe(0)
+  })
 })
