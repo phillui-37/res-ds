@@ -2,6 +2,8 @@
 
 import * as Core__Array from "@rescript/core/src/Core__Array.res.mjs";
 import * as PersistentVector from "../src/PersistentVector.res.mjs";
+import * as Primitive_object from "@rescript/runtime/lib/es6/Primitive_object.js";
+import * as Primitive_exceptions from "@rescript/runtime/lib/es6/Primitive_exceptions.js";
 
 describe("PersistentVector — basics", () => {
   test("empty vector has size 0", () => {
@@ -55,6 +57,77 @@ describe("PersistentVector — basics", () => {
       1,
       2
     ]);
+  });
+  test("pop on empty vector throws Invalid_argument", () => {
+    let msg = "";
+    try {
+      PersistentVector.pop(PersistentVector.make());
+    } catch (raw_m) {
+      let m = Primitive_exceptions.internalToException(raw_m);
+      if (m.RE_EXN_ID === "Invalid_argument") {
+        msg = m._1;
+      } else {
+        throw m;
+      }
+    }
+    expect(msg).toBe("PersistentVector.pop: empty vector");
+  });
+  test("set with negative index throws Invalid_argument", () => {
+    let v = PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let msg = "";
+    try {
+      PersistentVector.set(v, -1, 0);
+    } catch (raw_m) {
+      let m = Primitive_exceptions.internalToException(raw_m);
+      if (m.RE_EXN_ID === "Invalid_argument") {
+        msg = m._1;
+      } else {
+        throw m;
+      }
+    }
+    expect(msg).toBe("PersistentVector.set: index out of bounds");
+  });
+  test("set with index > size throws Invalid_argument", () => {
+    let v = PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let msg = "";
+    try {
+      PersistentVector.set(v, 4, 0);
+    } catch (raw_m) {
+      let m = Primitive_exceptions.internalToException(raw_m);
+      if (m.RE_EXN_ID === "Invalid_argument") {
+        msg = m._1;
+      } else {
+        throw m;
+      }
+    }
+    expect(msg).toBe("PersistentVector.set: index out of bounds");
+  });
+  test("setMut with out-of-bounds index throws Invalid_argument", () => {
+    let t = PersistentVector.asTransient(PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]));
+    let msg = "";
+    try {
+      PersistentVector.setMut(t, -1, 0);
+    } catch (raw_m) {
+      let m = Primitive_exceptions.internalToException(raw_m);
+      if (m.RE_EXN_ID === "Invalid_argument") {
+        msg = m._1;
+      } else {
+        throw m;
+      }
+    }
+    expect(msg).toBe("PersistentVector.setMut: index out of bounds");
   });
   test("toArray round-trip on a 1000-element vector (crosses tail boundary)", () => {
     let arr = Core__Array.fromInitializer(1000, i => i);
@@ -124,6 +197,27 @@ describe("PersistentVector — basics", () => {
   });
 });
 
+describe("PersistentVector — first/last", () => {
+  test("first/last return None on empty vector", () => {
+    let v = PersistentVector.make();
+    expect(PersistentVector.first(v)).toEqual(undefined);
+    expect(PersistentVector.last(v)).toEqual(undefined);
+  });
+  test("first/last return correct elements", () => {
+    let v = PersistentVector.fromArray([
+      10,
+      20,
+      30
+    ]);
+    expect(PersistentVector.first(v)).toEqual(10);
+    expect(PersistentVector.last(v)).toEqual(30);
+  });
+  test("firstExn/lastExn throw on empty", () => {
+    expect(() => PersistentVector.firstExn(PersistentVector.make())).toThrow();
+    expect(() => PersistentVector.lastExn(PersistentVector.make())).toThrow();
+  });
+});
+
 describe("PersistentVector — transients", () => {
   test("transient pushMut + persistent matches the persistent path", () => {
     let built = PersistentVector.withTransient(PersistentVector.make(), t => {
@@ -169,6 +263,142 @@ describe("PersistentVector — transients", () => {
     expect(() => {
       PersistentVector.pushMut(t, 4);
     }).toThrow();
+  });
+  test("equals short-circuits: comparator not called after first mismatch", () => {
+    let calls = {
+      contents: 0
+    };
+    let eq = (a, b) => {
+      calls.contents = calls.contents + 1 | 0;
+      return Primitive_object.equal(a, b);
+    };
+    let a = PersistentVector.fromArray(Core__Array.fromInitializer(64, i => i));
+    let b = PersistentVector.set(a, 0, -1);
+    PersistentVector.equals(a, b, eq);
+    expect(calls.contents).toBe(1);
+  });
+  test("isEmpty returns true for empty vector", () => {
+    expect(PersistentVector.isEmpty(PersistentVector.make())).toBe(true);
+    expect(PersistentVector.isEmpty(PersistentVector.fromArray([1]))).toBe(false);
+  });
+});
+
+describe("PersistentVector — slice/concat", () => {
+  test("slice returns sub-range", () => {
+    let v = PersistentVector.fromArray([
+      0,
+      1,
+      2,
+      3,
+      4
+    ]);
+    expect(PersistentVector.toArray(PersistentVector.slice(v, 1, 4))).toEqual([
+      1,
+      2,
+      3
+    ]);
+  });
+  test("slice with clamped bounds returns empty", () => {
+    let v = PersistentVector.fromArray([
+      0,
+      1,
+      2
+    ]);
+    expect(PersistentVector.size(PersistentVector.slice(v, 5, 10))).toBe(0);
+    expect(PersistentVector.size(PersistentVector.slice(v, 2, 1))).toBe(0);
+  });
+  test("slice full range equals original", () => {
+    let arr = Core__Array.fromInitializer(100, i => i);
+    let v = PersistentVector.fromArray(arr);
+    expect(PersistentVector.toArray(PersistentVector.slice(v, 0, 100))).toEqual(arr);
+  });
+  test("concat two vectors", () => {
+    let a = PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let b = PersistentVector.fromArray([
+      4,
+      5,
+      6
+    ]);
+    expect(PersistentVector.toArray(PersistentVector.concat(a, b))).toEqual([
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]);
+  });
+  test("concat with empty is identity", () => {
+    let v = PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]);
+    expect(PersistentVector.toArray(PersistentVector.concat(v, PersistentVector.make()))).toEqual([
+      1,
+      2,
+      3
+    ]);
+    expect(PersistentVector.toArray(PersistentVector.concat(PersistentVector.make(), v))).toEqual([
+      1,
+      2,
+      3
+    ]);
+  });
+  test("concat large vectors (crosses trie boundaries)", () => {
+    let a = PersistentVector.fromArray(Core__Array.fromInitializer(500, i => i));
+    let b = PersistentVector.fromArray(Core__Array.fromInitializer(500, i => 500 + i | 0));
+    let c = PersistentVector.concat(a, b);
+    expect(PersistentVector.size(c)).toBe(1000);
+    expect(PersistentVector.getExn(c, 999)).toBe(999);
+  });
+});
+
+describe("PersistentVector — search/predicate", () => {
+  test("find returns first matching element", () => {
+    let v = PersistentVector.fromArray([
+      1,
+      2,
+      3,
+      4,
+      5
+    ]);
+    expect(PersistentVector.find(v, x => x > 3)).toEqual(4);
+    expect(PersistentVector.find(v, x => x > 10)).toEqual(undefined);
+  });
+  test("findIndex returns index of first match", () => {
+    let v = PersistentVector.fromArray([
+      10,
+      20,
+      30,
+      20
+    ]);
+    expect(PersistentVector.findIndex(v, x => x === 20)).toEqual(1);
+    expect(PersistentVector.findIndex(v, x => x === 99)).toEqual(undefined);
+  });
+  test("some returns true iff any element satisfies predicate", () => {
+    let v = PersistentVector.fromArray([
+      1,
+      2,
+      3
+    ]);
+    expect(PersistentVector.some(v, x => x > 2)).toBe(true);
+    expect(PersistentVector.some(v, x => x > 10)).toBe(false);
+    expect(PersistentVector.some(PersistentVector.make(), param => true)).toBe(false);
+  });
+  test("every returns true iff all elements satisfy predicate", () => {
+    let v = PersistentVector.fromArray([
+      2,
+      4,
+      6
+    ]);
+    expect(PersistentVector.every(v, x => x % 2 === 0)).toBe(true);
+    expect(PersistentVector.every(v, x => x > 3)).toBe(false);
+    expect(PersistentVector.every(PersistentVector.make(), param => false)).toBe(true);
   });
 });
 

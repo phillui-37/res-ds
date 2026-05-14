@@ -2,6 +2,7 @@
 
 import * as Hash from "../src/Hash.res.mjs";
 import * as Core__Array from "@rescript/core/src/Core__Array.res.mjs";
+import * as Core__Option from "@rescript/core/src/Core__Option.res.mjs";
 import * as PersistentHashMap from "../src/PersistentHashMap.res.mjs";
 
 describe("PersistentHashMap — basics", () => {
@@ -222,6 +223,29 @@ describe("PersistentHashMap — collision handling", () => {
   });
 });
 
+describe("PersistentHashMap — null/undefined key distinction", () => {
+  test("null and undefined keys are distinct", () => {
+    let m = PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.make(), null, 1), undefined, 2);
+    expect(PersistentHashMap.size(m)).toBe(2);
+    expect(PersistentHashMap.get(m, null)).toEqual(1);
+    expect(PersistentHashMap.get(m, undefined)).toEqual(2);
+  });
+  test("entries preserves the original key (null stays null, undefined stays undefined)", () => {
+    let m = PersistentHashMap.set(PersistentHashMap.make(), null, 42);
+    let es = PersistentHashMap.entries(m);
+    expect(es.length).toBe(1);
+    let match = es[0];
+    expect(match[0] === null).toBe(true);
+    expect(match[1]).toBe(42);
+  });
+  test("remove null does not remove undefined", () => {
+    let m = PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.make(), null, 1), undefined, 2);
+    let m2 = PersistentHashMap.remove(m, null);
+    expect(PersistentHashMap.has(m2, null)).toBe(false);
+    expect(PersistentHashMap.get(m2, undefined)).toEqual(2);
+  });
+});
+
 describe("PersistentHashMap — transients", () => {
   test("setMut + persistent preserves correctness for 5000 entries", () => {
     let m = PersistentHashMap.withTransient(PersistentHashMap.make(), t => {
@@ -266,6 +290,124 @@ describe("PersistentHashMap — transients", () => {
     expect(() => {
       PersistentHashMap.setMut(t, "b", 2);
     }).toThrow();
+  });
+});
+
+describe("PersistentHashMap — lazy iterator", () => {
+  test("iterator yields exactly size elements", () => {
+    let m = PersistentHashMap.make();
+    for (let i = 0; i <= 999; ++i) {
+      m = PersistentHashMap.set(m, i, (i << 1));
+    }
+    let it = PersistentHashMap.iterator(m);
+    let count = 0;
+    let step = it.next();
+    while (!step.done) {
+      count = count + 1 | 0;
+      step = it.next();
+    };
+    expect(count).toBe(1000);
+  });
+  test("iterator terminates correctly with null/undefined keys", () => {
+    let m = PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.make(), null, 0), undefined, 1), "a", 2);
+    let it = PersistentHashMap.iterator(m);
+    let count = 0;
+    let step = it.next();
+    while (!step.done) {
+      count = count + 1 | 0;
+      step = it.next();
+    };
+    expect(count).toBe(3);
+  });
+  test("isEmpty returns true for empty map", () => {
+    expect(PersistentHashMap.isEmpty(PersistentHashMap.make())).toBe(true);
+    expect(PersistentHashMap.isEmpty(PersistentHashMap.set(PersistentHashMap.make(), "a", 1))).toBe(false);
+  });
+});
+
+describe("PersistentHashMap — map/filter/update", () => {
+  test("map transforms all values", () => {
+    let m = PersistentHashMap.fromEntries([
+      [
+        "a",
+        1
+      ],
+      [
+        "b",
+        2
+      ],
+      [
+        "c",
+        3
+      ]
+    ]);
+    let m2 = PersistentHashMap.map(m, v => v * 10 | 0);
+    expect(PersistentHashMap.getExn(m2, "a")).toBe(10);
+    expect(PersistentHashMap.getExn(m2, "b")).toBe(20);
+    expect(PersistentHashMap.size(m2)).toBe(3);
+    expect(PersistentHashMap.getExn(m, "a")).toBe(1);
+  });
+  test("filter keeps only matching entries", () => {
+    let m = PersistentHashMap.fromEntries([
+      [
+        "a",
+        1
+      ],
+      [
+        "b",
+        2
+      ],
+      [
+        "c",
+        3
+      ]
+    ]);
+    let m2 = PersistentHashMap.filter(m, (param, v) => v > 1);
+    expect(PersistentHashMap.size(m2)).toBe(2);
+    expect(PersistentHashMap.has(m2, "a")).toBe(false);
+    expect(PersistentHashMap.has(m2, "b")).toBe(true);
+  });
+  test("update inserts when key absent", () => {
+    let m = PersistentHashMap.make();
+    let m2 = PersistentHashMap.update(m, "x", param => 42);
+    expect(PersistentHashMap.getExn(m2, "x")).toBe(42);
+  });
+  test("update modifies existing key", () => {
+    let m = PersistentHashMap.fromEntries([[
+        "x",
+        10
+      ]]);
+    let m2 = PersistentHashMap.update(m, "x", v => Core__Option.getOr(v, 0) + 5 | 0);
+    expect(PersistentHashMap.getExn(m2, "x")).toBe(15);
+  });
+  test("update removes key when f returns None", () => {
+    let m = PersistentHashMap.fromEntries([[
+        "x",
+        10
+      ]]);
+    let m2 = PersistentHashMap.update(m, "x", param => {});
+    expect(PersistentHashMap.has(m2, "x")).toBe(false);
+    expect(PersistentHashMap.size(m2)).toBe(0);
+  });
+  test("map with null and undefined keys", () => {
+    let m = PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.make(), "a", 1), null, 2), undefined, 3);
+    let m2 = PersistentHashMap.map(m, v => v * 10 | 0);
+    expect(PersistentHashMap.get(m2, "a")).toEqual(10);
+    expect(PersistentHashMap.get(m2, null)).toEqual(20);
+    expect(PersistentHashMap.get(m2, undefined)).toEqual(30);
+  });
+  test("filter with null and undefined keys", () => {
+    let m = PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.set(PersistentHashMap.make(), "a", 1), null, 2), undefined, 3);
+    let m2 = PersistentHashMap.filter(m, (param, v) => v > 1);
+    expect(PersistentHashMap.size(m2)).toBe(2);
+    expect(PersistentHashMap.get(m2, "a")).toEqual(undefined);
+    expect(PersistentHashMap.get(m2, null)).toEqual(2);
+    expect(PersistentHashMap.get(m2, undefined)).toEqual(3);
+  });
+  test("update absent key with f returning None is a no-op", () => {
+    let m = PersistentHashMap.make();
+    let m2 = PersistentHashMap.update(m, "x", param => {});
+    expect(PersistentHashMap.size(m2)).toBe(0);
   });
 });
 

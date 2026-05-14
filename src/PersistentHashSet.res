@@ -93,7 +93,7 @@ let isSubsetOf = (a: t<'a>, b: t<'a>): bool =>
   try {
     forEach(a, x =>
       if !has(b, x) {
-        raise(FoundNonMember)
+        throw(FoundNonMember)
       }
     )
     true

@@ -74,6 +74,113 @@ describe("PersistentHashSet — basics", () => {
     };
     expect(count).toBe(5);
   });
+  test("isEmpty returns true for empty set", () => {
+    expect(PersistentHashSet.isEmpty(PersistentHashSet.make())).toBe(true);
+    expect(PersistentHashSet.isEmpty(PersistentHashSet.add(PersistentHashSet.make(), 1))).toBe(false);
+  });
+});
+
+describe("PersistentHashSet — equals/subset/superset/filter/map", () => {
+  test("equals returns true for identical content", () => {
+    let a = PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let b = PersistentHashSet.fromArray([
+      3,
+      1,
+      2
+    ]);
+    expect(PersistentHashSet.equals(a, b)).toBe(true);
+  });
+  test("equals returns false when content differs", () => {
+    let a = PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let b = PersistentHashSet.fromArray([
+      1,
+      2,
+      4
+    ]);
+    expect(PersistentHashSet.equals(a, b)).toBe(false);
+    expect(PersistentHashSet.equals(PersistentHashSet.fromArray([
+      1,
+      2
+    ]), PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]))).toBe(false);
+  });
+  test("isSubsetOf", () => {
+    let a = PersistentHashSet.fromArray([
+      1,
+      2
+    ]);
+    let b = PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]);
+    expect(PersistentHashSet.isSubsetOf(a, b)).toBe(true);
+    expect(PersistentHashSet.isSubsetOf(b, a)).toBe(false);
+    expect(PersistentHashSet.isSubsetOf(a, a)).toBe(true);
+  });
+  test("isSupersetOf", () => {
+    let a = PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let b = PersistentHashSet.fromArray([
+      1,
+      2
+    ]);
+    expect(PersistentHashSet.isSupersetOf(a, b)).toBe(true);
+    expect(PersistentHashSet.isSupersetOf(b, a)).toBe(false);
+  });
+  test("filter keeps only matching elements", () => {
+    let s = PersistentHashSet.fromArray([
+      1,
+      2,
+      3,
+      4,
+      5
+    ]);
+    let even = PersistentHashSet.filter(s, x => x % 2 === 0);
+    expect(PersistentHashSet.size(even)).toBe(2);
+    expect(PersistentHashSet.has(even, 2)).toBe(true);
+    expect(PersistentHashSet.has(even, 1)).toBe(false);
+  });
+  test("map transforms elements", () => {
+    let s = PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]);
+    let doubled = PersistentHashSet.map(s, x => (x << 1));
+    expect(PersistentHashSet.has(doubled, 2)).toBe(true);
+    expect(PersistentHashSet.has(doubled, 4)).toBe(true);
+    expect(PersistentHashSet.has(doubled, 6)).toBe(true);
+    expect(PersistentHashSet.size(doubled)).toBe(3);
+  });
+  test("empty set edge cases", () => {
+    let empty = PersistentHashSet.make();
+    let nonEmpty = PersistentHashSet.fromArray([
+      1,
+      2,
+      3
+    ]);
+    expect(PersistentHashSet.equals(empty, empty)).toBe(true);
+    expect(PersistentHashSet.isSubsetOf(empty, nonEmpty)).toBe(true);
+    expect(PersistentHashSet.isSubsetOf(empty, empty)).toBe(true);
+    expect(PersistentHashSet.isSupersetOf(nonEmpty, empty)).toBe(true);
+    expect(PersistentHashSet.size(PersistentHashSet.filter(empty, param => true))).toBe(0);
+    expect(PersistentHashSet.size(PersistentHashSet.map(empty, x => x))).toBe(0);
+  });
 });
 
 let S;

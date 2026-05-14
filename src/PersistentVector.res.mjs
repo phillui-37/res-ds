@@ -23,6 +23,10 @@ function size(v) {
   return v.size;
 }
 
+function isEmpty(v) {
+  return v.size === 0;
+}
+
 function tailOffset(v) {
   if (v.size < 32) {
     return 0;
@@ -253,7 +257,8 @@ function doSet(level, n, i, x) {
 function set(v, i, x) {
   if (i < 0 || i > v.size) {
     throw {
-      RE_EXN_ID: "Not_found",
+      RE_EXN_ID: "Invalid_argument",
+      _1: "PersistentVector.set: index out of bounds",
       Error: new Error()
     };
   }
@@ -373,7 +378,8 @@ function pop(v) {
     };
   }
   throw {
-    RE_EXN_ID: "Not_found",
+    RE_EXN_ID: "Invalid_argument",
+    _1: "PersistentVector.pop: empty vector",
     Error: new Error()
   };
 }
@@ -473,11 +479,13 @@ function equals(a, b, eq) {
     let bv = arrayFor(b, i);
     let baseIdx = i - (i & 31) | 0;
     let copyLen = Math.min(32, a.size - baseIdx | 0);
-    for (let j = 0; j < copyLen; ++j) {
+    let j = 0;
+    while (same && j < copyLen) {
       if (!eq(av[j], bv[j])) {
         same = false;
       }
-    }
+      j = j + 1 | 0;
+    };
     i = baseIdx + copyLen | 0;
   };
   return same;
@@ -652,7 +660,8 @@ function setMut(t, i, x) {
   ensureEditable(t);
   if (i < 0 || i > t.size) {
     throw {
-      RE_EXN_ID: "Not_found",
+      RE_EXN_ID: "Invalid_argument",
+      _1: "PersistentVector.setMut: index out of bounds",
       Error: new Error()
     };
   }
@@ -751,8 +760,88 @@ function persistent(t) {
   };
 }
 
+function first(v) {
+  return get(v, 0);
+}
+
+function last(v) {
+  return get(v, v.size - 1 | 0);
+}
+
+function firstExn(v) {
+  return getExn(v, 0);
+}
+
+function lastExn(v) {
+  return getExn(v, v.size - 1 | 0);
+}
+
 function withTransient(v, f) {
   return persistent(f(asTransient(v)));
+}
+
+function slice(v, start, end_) {
+  let s = Math.max(0, start);
+  let e = Math.min(v.size, end_);
+  if (s >= e) {
+    return make();
+  }
+  let v$1 = make();
+  let t = asTransient(v$1);
+  let i = s;
+  while (i < e) {
+    pushMut(t, getExn(v, i));
+    i = i + 1 | 0;
+  };
+  return persistent(t);
+}
+
+function concat(a, b) {
+  let t = asTransient(a);
+  return persistent((forEach(b, x => {
+    pushMut(t, x);
+  }), t));
+}
+
+function find(v, f) {
+  let result;
+  let i = 0;
+  while (result === undefined && i < v.size) {
+    let x = getExn(v, i);
+    if (f(x)) {
+      result = Primitive_option.some(x);
+    }
+    i = i + 1 | 0;
+  };
+  return result;
+}
+
+function findIndex(v, f) {
+  let result;
+  let i = 0;
+  while (result === undefined && i < v.size) {
+    if (f(getExn(v, i))) {
+      result = i;
+    }
+    i = i + 1 | 0;
+  };
+  return result;
+}
+
+function some(v, f) {
+  return findIndex(v, f) !== undefined;
+}
+
+function every(v, f) {
+  let failed = false;
+  let i = 0;
+  while (!failed && i < v.size) {
+    if (!f(getExn(v, i))) {
+      failed = true;
+    }
+    i = i + 1 | 0;
+  };
+  return !failed;
 }
 
 let length = size;
@@ -761,6 +850,7 @@ export {
   make,
   size,
   length,
+  isEmpty,
   get,
   getExn,
   push,
@@ -775,6 +865,16 @@ export {
   filter,
   equals,
   iterator,
+  first,
+  last,
+  firstExn,
+  lastExn,
+  slice,
+  concat,
+  find,
+  findIndex,
+  some,
+  every,
   asTransient,
   pushMut,
   setMut,

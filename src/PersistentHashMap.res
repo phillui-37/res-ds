@@ -92,9 +92,9 @@ let isUndefined: 'k => bool = k => Type.typeof(k) == #undefined
 
 let get = (m: t<'k, 'v>, key: 'k): option<'v> =>
   if isNull(key) {
-    m.nullEntry->Option.map(snd)
+    m.nullEntry->Option.map(((_, v)) => v)
   } else if isUndefined(key) {
-    m.undefinedEntry->Option.map(snd)
+    m.undefinedEntry->Option.map(((_, v)) => v)
   } else {
     nodeFind(m.root, 0, Hash.hash(key), key)
   }
@@ -728,9 +728,9 @@ let removeMut = (t: transient<'k, 'v>, key: 'k): transient<'k, 'v> => {
 let getMut = (t: transient<'k, 'v>, key: 'k): option<'v> => {
   ensureEditable(t)
   if isNull(key) {
-    t.nullEntry->Option.map(snd)
+    t.nullEntry->Option.map(((_, v)) => v)
   } else if isUndefined(key) {
-    t.undefinedEntry->Option.map(snd)
+    t.undefinedEntry->Option.map(((_, v)) => v)
   } else {
     nodeFind(t.root, 0, Hash.hash(key), key)
   }
