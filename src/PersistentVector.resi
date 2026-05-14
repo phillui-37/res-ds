@@ -25,7 +25,8 @@ let getExn: (t<'a>, int) => 'a
 let push: (t<'a>, 'a) => t<'a>
 
 /** Returns a new vector with element `i` replaced by `x`.
-    Throws `Invalid_argument` if `i` is out of `[0, size)`. */
+    If `i == size`, equivalent to {!push} (appends `x`).
+    Throws `Invalid_argument` if `i` is out of `[0, size]`. */
 let set: (t<'a>, int, 'a) => t<'a>
 
 /** Returns a new vector with the last element removed.
@@ -77,7 +78,8 @@ let asTransient: t<'a> => transient<'a>
 /** Append `x` in place. Returns the same transient for chaining. */
 let pushMut: (transient<'a>, 'a) => transient<'a>
 
-/** Replace element `i` in place. Throws `Invalid_argument` if `i` is out of range. */
+/** Replace element `i` in place. If `i == size`, equivalent to {!pushMut}.
+    Throws `Invalid_argument` if `i` is out of `[0, size]`. */
 let setMut: (transient<'a>, int, 'a) => transient<'a>
 
 /** Look up element `i` on a transient. */
