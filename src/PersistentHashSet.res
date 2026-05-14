@@ -84,3 +84,44 @@ let hasMut = (t: transient<'a>, x: 'a): bool =>
 let persistent = (t: transient<'a>): t<'a> => M.persistent(t)
 let withTransient = (s: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
   s->asTransient->f->persistent
+
+// ───────────────────────── comparison and filtering ─────────────────────────
+
+let equals = (a: t<'a>, b: t<'a>): bool =>
+  M.size(a) == M.size(b) && {
+    let allIn = ref(true)
+    forEach(a, x =>
+      if !has(b, x) {
+        allIn := false
+      }
+    )
+    allIn.contents
+  }
+
+let isSubsetOf = (a: t<'a>, b: t<'a>): bool => {
+  let allIn = ref(true)
+  forEach(a, x =>
+    if !has(b, x) {
+      allIn := false
+    }
+  )
+  allIn.contents
+}
+
+let isSupersetOf = (a: t<'a>, b: t<'a>): bool => isSubsetOf(b, a)
+
+let filter = (s: t<'a>, f: 'a => bool): t<'a> =>
+  M.withTransient(make(), t => {
+    forEach(s, x =>
+      if f(x) {
+        M.setMut(t, x, ())->ignore
+      }
+    )
+    t
+  })
+
+let map = (s: t<'a>, f: 'a => 'b): t<'b> =>
+  M.withTransient(make(), t => {
+    forEach(s, x => M.setMut(t, f(x), ())->ignore)
+    t
+  })

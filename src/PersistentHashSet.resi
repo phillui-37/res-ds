@@ -76,3 +76,21 @@ let persistent: transient<'a> => t<'a>
 
 /** Convenience: `withTransient(s, f)` is `s |> asTransient |> f |> persistent`. */
 let withTransient: (t<'a>, transient<'a> => transient<'a>) => t<'a>
+
+// ───────────────────────── comparison and filtering ─────────────────────────
+
+/** True iff `a` and `b` contain exactly the same elements. */
+let equals: (t<'a>, t<'a>) => bool
+
+/** True iff every element of `a` is also in `b`. */
+let isSubsetOf: (t<'a>, t<'a>) => bool
+
+/** True iff every element of `b` is also in `a`. */
+let isSupersetOf: (t<'a>, t<'a>) => bool
+
+/** Returns a new set containing only elements satisfying `f`. */
+let filter: (t<'a>, 'a => bool) => t<'a>
+
+/** Returns a new set formed by applying `f` to every element.
+    If `f` maps two distinct elements to the same value, duplicates are dropped. */
+let map: (t<'a>, 'a => 'b) => t<'b>

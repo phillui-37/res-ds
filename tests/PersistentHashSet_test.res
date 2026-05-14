@@ -70,3 +70,49 @@ describe("PersistentHashSet — basics", () => {
     expect(S.isEmpty(S.add(S.make(), 1)))->toBe(false)
   })
 })
+
+describe("PersistentHashSet — equals/subset/superset/filter/map", () => {
+  test("equals returns true for identical content", () => {
+    let a = S.fromArray([1, 2, 3])
+    let b = S.fromArray([3, 1, 2])
+    expect(S.equals(a, b))->toBe(true)
+  })
+
+  test("equals returns false when content differs", () => {
+    let a = S.fromArray([1, 2, 3])
+    let b = S.fromArray([1, 2, 4])
+    expect(S.equals(a, b))->toBe(false)
+  })
+
+  test("isSubsetOf", () => {
+    let a = S.fromArray([1, 2])
+    let b = S.fromArray([1, 2, 3])
+    expect(S.isSubsetOf(a, b))->toBe(true)
+    expect(S.isSubsetOf(b, a))->toBe(false)
+    expect(S.isSubsetOf(a, a))->toBe(true)
+  })
+
+  test("isSupersetOf", () => {
+    let a = S.fromArray([1, 2, 3])
+    let b = S.fromArray([1, 2])
+    expect(S.isSupersetOf(a, b))->toBe(true)
+    expect(S.isSupersetOf(b, a))->toBe(false)
+  })
+
+  test("filter keeps only matching elements", () => {
+    let s = S.fromArray([1, 2, 3, 4, 5])
+    let even = S.filter(s, x => Int.mod(x, 2) == 0)
+    expect(S.size(even))->toBe(2)
+    expect(S.has(even, 2))->toBe(true)
+    expect(S.has(even, 1))->toBe(false)
+  })
+
+  test("map transforms elements", () => {
+    let s = S.fromArray([1, 2, 3])
+    let doubled = S.map(s, x => x * 2)
+    expect(S.has(doubled, 2))->toBe(true)
+    expect(S.has(doubled, 4))->toBe(true)
+    expect(S.has(doubled, 6))->toBe(true)
+    expect(S.size(doubled))->toBe(3)
+  })
+})
