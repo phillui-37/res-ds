@@ -246,3 +246,42 @@ describe("PersistentHashMap — lazy iterator", () => {
     expect(M.isEmpty(M.set(M.make(), "a", 1)))->toBe(false)
   })
 })
+
+describe("PersistentHashMap — map/filter/update", () => {
+  test("map transforms all values", () => {
+    let m = M.fromEntries([("a", 1), ("b", 2), ("c", 3)])
+    let m2 = M.map(m, v => v * 10)
+    expect(M.getExn(m2, "a"))->toBe(10)
+    expect(M.getExn(m2, "b"))->toBe(20)
+    expect(M.size(m2))->toBe(3)
+    // original unchanged
+    expect(M.getExn(m, "a"))->toBe(1)
+  })
+
+  test("filter keeps only matching entries", () => {
+    let m = M.fromEntries([("a", 1), ("b", 2), ("c", 3)])
+    let m2 = M.filter(m, (_, v) => v > 1)
+    expect(M.size(m2))->toBe(2)
+    expect(M.has(m2, "a"))->toBe(false)
+    expect(M.has(m2, "b"))->toBe(true)
+  })
+
+  test("update inserts when key absent", () => {
+    let m = M.make()
+    let m2 = M.update(m, "x", _ => Some(42))
+    expect(M.getExn(m2, "x"))->toBe(42)
+  })
+
+  test("update modifies existing key", () => {
+    let m = M.fromEntries([("x", 10)])
+    let m2 = M.update(m, "x", v => Some(Option.getOr(v, 0) + 5))
+    expect(M.getExn(m2, "x"))->toBe(15)
+  })
+
+  test("update removes key when f returns None", () => {
+    let m = M.fromEntries([("x", 10)])
+    let m2 = M.update(m, "x", _ => None)
+    expect(M.has(m2, "x"))->toBe(false)
+    expect(M.size(m2))->toBe(0)
+  })
+})

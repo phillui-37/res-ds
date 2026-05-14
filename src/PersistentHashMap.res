@@ -769,3 +769,31 @@ let merge = (a: t<'k, 'v>, b: t<'k, 'v>): t<'k, 'v> =>
     forEach(b, (k, v) => setMut(t, k, v)->ignore)
     t
   })
+
+let map = (m: t<'k, 'v>, f: 'v => 'w): t<'k, 'w> =>
+  withTransient(make(), t => {
+    forEach(m, (k, v) => setMut(t, k, f(v))->ignore)
+    t
+  })
+
+let filter = (m: t<'k, 'v>, f: ('k, 'v) => bool): t<'k, 'v> => {
+  let out = ref(make())
+  forEach(m, (k, v) =>
+    if f(k, v) {
+      out := set(out.contents, k, v)
+    }
+  )
+  out.contents
+}
+
+let update = (m: t<'k, 'v>, key: 'k, f: option<'v> => option<'v>): t<'k, 'v> => {
+  let current = get(m, key)
+  switch f(current) {
+  | Some(v) => set(m, key, v)
+  | None =>
+    switch current {
+    | Some(_) => remove(m, key)
+    | None => m
+    }
+  }
+}
