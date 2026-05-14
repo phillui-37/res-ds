@@ -281,11 +281,17 @@ let rec nodeAssoc = (
 
 let set = (m: t<'k, 'v>, key: 'k, value: 'v): t<'k, 'v> =>
   if isNull(key) {
-    let added = Option.isNone(m.nullEntry) ? 1 : 0
-    {...m, size: m.size + added, nullEntry: Some((key, value))}
+    switch m.nullEntry {
+    | Some((_, existingValue)) when existingValue == value => m
+    | Some(_) => {...m, nullEntry: Some((key, value))}
+    | None => {...m, size: m.size + 1, nullEntry: Some((key, value))}
+    }
   } else if isUndefined(key) {
-    let added = Option.isNone(m.undefinedEntry) ? 1 : 0
-    {...m, size: m.size + added, undefinedEntry: Some((key, value))}
+    switch m.undefinedEntry {
+    | Some((_, existingValue)) when existingValue == value => m
+    | Some(_) => {...m, undefinedEntry: Some((key, value))}
+    | None => {...m, size: m.size + 1, undefinedEntry: Some((key, value))}
+    }
   } else {
     let added = mkFlag()
     let newRoot = nodeAssoc(m.root, 0, Hash.hash(key), key, value, added)
