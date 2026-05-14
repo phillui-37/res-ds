@@ -36,17 +36,16 @@ let emptyNode = (): node<'k, 'v> =>
 type t<'k, 'v> = {
   size: int,
   root: node<'k, 'v>,
-  // We treat `null`-key (`undefined` value) as a special slot stored on the
-  // map itself, mirroring Clojure's `nil`-key handling.
-  hasNullKey: bool,
-  nullValue: option<'v>,
+  // null and undefined keys stored in distinct slots to preserve key identity.
+  nullEntry: option<('k, 'v)>,
+  undefinedEntry: option<('k, 'v)>,
 }
 
 let make = (): t<'k, 'v> => {
   size: 0,
   root: emptyNode(),
-  hasNullKey: false,
-  nullValue: None,
+  nullEntry: None,
+  undefinedEntry: None,
 }
 
 let size = (m: t<'k, 'v>): int => m.size
@@ -87,11 +86,14 @@ let rec nodeFind = (n: node<'k, 'v>, shift: int, hash: int, key: 'k): option<'v>
     }
   }
 
-let isNullKey: 'k => bool = k => Obj.magic(k) === Obj.magic(Null.null) || Type.typeof(k) == #undefined
+let isNull: 'k => bool = k => Obj.magic(k) === Obj.magic(Null.null)
+let isUndefined: 'k => bool = k => Type.typeof(k) == #undefined
 
 let get = (m: t<'k, 'v>, key: 'k): option<'v> =>
-  if isNullKey(key) {
-    m.nullValue
+  if isNull(key) {
+    m.nullEntry->Option.map(snd)
+  } else if isUndefined(key) {
+    m.undefinedEntry->Option.map(snd)
   } else {
     nodeFind(m.root, 0, Hash.hash(key), key)
   }
@@ -103,8 +105,10 @@ let getExn = (m: t<'k, 'v>, key: 'k): 'v =>
   }
 
 let has = (m: t<'k, 'v>, key: 'k): bool =>
-  if isNullKey(key) {
-    m.hasNullKey
+  if isNull(key) {
+    Option.isSome(m.nullEntry)
+  } else if isUndefined(key) {
+    Option.isSome(m.undefinedEntry)
   } else {
     switch nodeFind(m.root, 0, Hash.hash(key), key) {
     | Some(_) => true
@@ -275,22 +279,12 @@ let rec nodeAssoc = (
   }
 
 let set = (m: t<'k, 'v>, key: 'k, value: 'v): t<'k, 'v> =>
-  if isNullKey(key) {
-    let already = m.hasNullKey
-    let sameVal = switch m.nullValue {
-    | Some(v) => Hash.equals(v, value)
-    | None => false
-    }
-    if already && sameVal {
-      m
-    } else {
-      {
-        ...m,
-        size: already ? m.size : m.size + 1,
-        hasNullKey: true,
-        nullValue: Some(value),
-      }
-    }
+  if isNull(key) {
+    let added = Option.isNone(m.nullEntry) ? 1 : 0
+    {...m, size: m.size + added, nullEntry: Some((key, value))}
+  } else if isUndefined(key) {
+    let added = Option.isNone(m.undefinedEntry) ? 1 : 0
+    {...m, size: m.size + added, undefinedEntry: Some((key, value))}
   } else {
     let added = mkFlag()
     let newRoot = nodeAssoc(m.root, 0, Hash.hash(key), key, value, added)
@@ -399,12 +393,12 @@ let rec nodeWithout = (
   }
 
 let remove = (m: t<'k, 'v>, key: 'k): t<'k, 'v> =>
-  if isNullKey(key) {
-    if m.hasNullKey {
-      {...m, size: m.size - 1, hasNullKey: false, nullValue: None}
-    } else {
-      m
-    }
+  if isNull(key) {
+    let removed = Option.isSome(m.nullEntry) ? 1 : 0
+    {...m, size: m.size - removed, nullEntry: None}
+  } else if isUndefined(key) {
+    let removed = Option.isSome(m.undefinedEntry) ? 1 : 0
+    {...m, size: m.size - removed, undefinedEntry: None}
   } else {
     let removed = mkFlag()
     let newRoot = nodeWithout(m.root, 0, Hash.hash(key), key, removed)
@@ -430,11 +424,13 @@ let rec nodeForEach = (n: node<'k, 'v>, f: ('k, 'v) => unit): unit =>
   }
 
 let forEach = (m: t<'k, 'v>, f: ('k, 'v) => unit): unit => {
-  if m.hasNullKey {
-    switch m.nullValue {
-    | Some(v) => f(Obj.magic(Null.null), v)
-    | None => ()
-    }
+  switch m.nullEntry {
+  | Some((k, v)) => f(k, v)
+  | None => ()
+  }
+  switch m.undefinedEntry {
+  | Some((k, v)) => f(k, v)
+  | None => ()
   }
   nodeForEach(m.root, f)
 }
@@ -493,16 +489,16 @@ let iterator = (m: t<'k, 'v>): iter<('k, 'v)> => {
 type transient<'k, 'v> = {
   mutable size: int,
   mutable root: node<'k, 'v>,
-  mutable hasNullKey: bool,
-  mutable nullValue: option<'v>,
+  mutable nullEntry: option<('k, 'v)>,
+  mutable undefinedEntry: option<('k, 'v)>,
   edit: edit,
 }
 
 let asTransient = (m: t<'k, 'v>): transient<'k, 'v> => {
   size: m.size,
   root: m.root,
-  hasNullKey: m.hasNullKey,
-  nullValue: m.nullValue,
+  nullEntry: m.nullEntry,
+  undefinedEntry: m.undefinedEntry,
   edit: {owned: true},
 }
 
@@ -636,12 +632,17 @@ let rec nodeAssocMut = (
 
 let setMut = (t: transient<'k, 'v>, key: 'k, value: 'v): transient<'k, 'v> => {
   ensureEditable(t)
-  if isNullKey(key) {
-    if !t.hasNullKey {
+  if isNull(key) {
+    if Option.isNone(t.nullEntry) {
       t.size = t.size + 1
     }
-    t.hasNullKey = true
-    t.nullValue = Some(value)
+    t.nullEntry = Some((key, value))
+    t
+  } else if isUndefined(key) {
+    if Option.isNone(t.undefinedEntry) {
+      t.size = t.size + 1
+    }
+    t.undefinedEntry = Some((key, value))
     t
   } else {
     let added = mkFlag()
@@ -656,10 +657,15 @@ let setMut = (t: transient<'k, 'v>, key: 'k, value: 'v): transient<'k, 'v> => {
 
 let removeMut = (t: transient<'k, 'v>, key: 'k): transient<'k, 'v> => {
   ensureEditable(t)
-  if isNullKey(key) {
-    if t.hasNullKey {
-      t.hasNullKey = false
-      t.nullValue = None
+  if isNull(key) {
+    if Option.isSome(t.nullEntry) {
+      t.nullEntry = None
+      t.size = t.size - 1
+    }
+    t
+  } else if isUndefined(key) {
+    if Option.isSome(t.undefinedEntry) {
+      t.undefinedEntry = None
       t.size = t.size - 1
     }
     t
@@ -679,8 +685,10 @@ let removeMut = (t: transient<'k, 'v>, key: 'k): transient<'k, 'v> => {
 
 let getMut = (t: transient<'k, 'v>, key: 'k): option<'v> => {
   ensureEditable(t)
-  if isNullKey(key) {
-    t.nullValue
+  if isNull(key) {
+    t.nullEntry->Option.map(snd)
+  } else if isUndefined(key) {
+    t.undefinedEntry->Option.map(snd)
   } else {
     nodeFind(t.root, 0, Hash.hash(key), key)
   }
@@ -689,7 +697,7 @@ let getMut = (t: transient<'k, 'v>, key: 'k): option<'v> => {
 let persistent = (t: transient<'k, 'v>): t<'k, 'v> => {
   ensureEditable(t)
   t.edit.owned = false
-  {size: t.size, root: t.root, hasNullKey: t.hasNullKey, nullValue: t.nullValue}
+  {size: t.size, root: t.root, nullEntry: t.nullEntry, undefinedEntry: t.undefinedEntry}
 }
 
 let withTransient = (m: t<'k, 'v>, f: transient<'k, 'v> => transient<'k, 'v>): t<'k, 'v> =>
