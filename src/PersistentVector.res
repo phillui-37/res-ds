@@ -547,5 +547,13 @@ let persistent = (t: transient<'a>): t<'a> => {
 }
 
 // Convenience: build a vector via a mutable transient closure (very fast for bulk loads).
+let first = (v: t<'a>): option<'a> => get(v, 0)
+
+let last = (v: t<'a>): option<'a> => get(v, v.size - 1)
+
+let firstExn = (v: t<'a>): 'a => getExn(v, 0)
+
+let lastExn = (v: t<'a>): 'a => getExn(v, v.size - 1)
+
 let withTransient = (v: t<'a>, f: transient<'a> => transient<'a>): t<'a> =>
   v->asTransient->f->persistent

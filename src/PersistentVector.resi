@@ -69,6 +69,18 @@ type iter<'a> = {next: unit => iterStep<'a>}
 /** Build a JS-style iterator over the vector's elements. */
 let iterator: t<'a> => iter<'a>
 
+/** O(1). First element, or `None` if empty. */
+let first: t<'a> => option<'a>
+
+/** O(1). Last element, or `None` if empty. */
+let last: t<'a> => option<'a>
+
+/** O(1). First element. Throws `Not_found` if empty. */
+let firstExn: t<'a> => 'a
+
+/** O(1). Last element. Throws `Not_found` if empty. */
+let lastExn: t<'a> => 'a
+
 // ───────────────────────── transient (mutable) builder ─────────────────────────
 
 /** Opaque transient (in-place mutable) vector. Use only between {!asTransient}

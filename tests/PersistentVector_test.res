@@ -132,6 +132,25 @@ describe("PersistentVector — basics", () => {
   })
 })
 
+describe("PersistentVector — first/last", () => {
+  test("first/last return None on empty vector", () => {
+    let v = V.make()
+    expect(V.first(v))->toEqual(None)
+    expect(V.last(v))->toEqual(None)
+  })
+
+  test("first/last return correct elements", () => {
+    let v = V.fromArray([10, 20, 30])
+    expect(V.first(v))->toEqual(Some(10))
+    expect(V.last(v))->toEqual(Some(30))
+  })
+
+  test("firstExn/lastExn throw on empty", () => {
+    expect(() => V.firstExn(V.make()))->toThrow
+    expect(() => V.lastExn(V.make()))->toThrow
+  })
+})
+
 describe("PersistentVector — transients", () => {
   test("transient pushMut + persistent matches the persistent path", () => {
     let n = 5_000
