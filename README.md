@@ -11,9 +11,10 @@ use the deprecated `Belt` modules.
 
 | Module                | What it is                                                                  |
 |----------------------|------------------------------------------------------------------------------|
-| `PersistentVector`   | 32-way bitmapped trie with a 32-element tail buffer (Clojure's persistent vector). O(log₃₂ N) lookup / update / push / pop. |
-| `PersistentHashMap`  | Hash Array Mapped Trie (HAMT) with **bitmap-compressed** nodes, **hash-collision** nodes, and 5-bit branching. O(log₃₂ N) get / set / remove. |
-| `PersistentHashSet`  | Built on top of `PersistentHashMap`; element-type `'a`, value `unit`.        |
+| `PersistentVector`   | 32-way bitmapped trie with a 32-element tail buffer (Clojure's persistent vector). O(log₃₂ N) lookup / update / push / pop. New: `isEmpty`, `first`/`last`, `slice`/`concat`, `find`/`findIndex`/`some`/`every`. |
+| `PersistentHashMap`  | Hash Array Mapped Trie (HAMT) with **bitmap-compressed** nodes, **hash-collision** nodes, and 5-bit branching. O(log₃₂ N) get / set / remove. New: `isEmpty`, `map`/`filter`/`update`. |
+| `PersistentHashSet`  | Built on top of `PersistentHashMap`; element-type `'a`, value `unit`. New: `isEmpty`, `equals`/`isSubsetOf`/`isSupersetOf`/`filter`/`map`. |
+| `PersistentQueue`    | Persistent FIFO queue (two-list, amortised O(1) enqueue/dequeue). |
 
 ### Advanced features
 
@@ -68,7 +69,7 @@ property-insertion order.
 
 ```sh
 pnpm install
-pnpm test           # build ReScript + run the Vitest suite (52 tests, ~6 s)
+pnpm test           # build ReScript + run the Vitest suite (102 tests, ~6 s)
 pnpm bench          # build + run the benchmark harness (Node ≥20)
 pnpm build          # produce ESM bundle in dist/
 pnpm res:watch      # ReScript incremental rebuild
@@ -107,6 +108,7 @@ src/
   PersistentVector.res(i)    – Bitmapped trie + tail + transient
   PersistentHashMap.res(i)   – HAMT + collision nodes + transient
   PersistentHashSet.res(i)   – Set built on the hashmap
+  PersistentQueue.res(i)     – Persistent FIFO queue (two-list)
   ResDs.res(i)               – Public barrel module
 tests/
   Vitest.res                 – Bindings to vitest globals
@@ -114,6 +116,7 @@ tests/
   PersistentVector_test.res
   PersistentHashMap_test.res
   PersistentHashSet_test.res
+  PersistentQueue_test.res
   StackOverflow_stress_test.res
 bench/
   Bench.res                  – Comparison vs @rescript/core Map/Array
@@ -263,6 +266,7 @@ the ReScript compiler can see its `.res` / `.resi` files:
 module V = ResDs.Vector
 module M = ResDs.HashMap
 module S = ResDs.HashSet
+module Q = ResDs.PersistentQueue
 module H = ResDs.Hash
 ```
 
@@ -272,6 +276,7 @@ Subpath imports are also exported for JS consumers:
 import * as Vector  from "res-ds/Vector"
 import * as HashMap from "res-ds/HashMap"
 import * as HashSet from "res-ds/HashSet"
+import * as Queue   from "res-ds/Queue"
 import * as Hash    from "res-ds/Hash"
 ```
 
@@ -328,6 +333,18 @@ let b = S.fromArray(["y", "z"])
 let _ = S.union(a, b)         // {x, y, z}
 let _ = S.intersect(a, b)     // {y}
 let _ = S.difference(a, b)    // {x}
+```
+
+#### Persistent queue
+
+```rescript
+module Q = ResDs.PersistentQueue
+
+let q0 = Q.fromArray([1, 2, 3])
+let _  = Q.peek(q0)             // Some(1)
+let q1 = Q.enqueue(q0, 4)       // [1, 2, 3, 4]
+let _  = Q.dequeue(q1)          // Some((1, [2, 3, 4]))
+let _  = Q.toArray(q0)          // [1, 2, 3]
 ```
 
 #### JS-style iteration
